@@ -9,13 +9,14 @@ const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": 
 let authState = { kind: "loading" };
 window.__authScreen = () => {
   const a = authState;
-  if (a.kind === "setup") return `<div class="empty"><b>Almost there</b>Paste your Firebase settings into <code>firebase-config.js</code>, upload it to GitHub, and reload this page.</div>`;
-  if (a.kind === "signin") return `<div class="empty"><b>Sign in to open the desk</b>Use the Google account your teammate added to the access list.<br><br><button class="btn pri" data-auth="signin">Sign in with Google</button>${a.err ? `<p class="sub" style="margin:12px auto 0">${esc(a.err)}</p>` : ""}</div>`;
-  if (a.kind === "denied") return `<div class="empty"><b>This account isn't on the access list</b>You're signed in as ${esc(a.email)}. Ask the owner to add this email to the database rules, then reload.<br><br><button class="btn" data-auth="signout">Sign in with a different account</button></div>`;
-  if (a.kind === "error") return `<div class="empty"><b>Couldn't reach the database</b>${esc(a.msg)}<br><br><button class="btn" onclick="location.reload()">Try again</button></div>`;
-  return `<div class="empty"><b>Opening the desk…</b>Connecting to your shared workspace.</div>`;
+  const hero = (body) => `<section class="hero landing"><canvas class="dna" data-x0="0.56" aria-hidden="true"></canvas><div class="hx"><div class="kicker">NEWSLETTER DESK</div><h1>Nucleate <span class="dash">–</span> Technion Branch</h1>${body}</div></section>`;
+  if (a.kind === "setup") return hero(`<p>Almost there: paste your Firebase settings into <code>firebase-config.js</code>, upload it to GitHub, and reload this page.</p>`);
+  if (a.kind === "signin") return hero(`<p>Collect what's happening in biotech around campus, decide together, and send the weekly digest to the group.</p><div class="acts"><button class="btn pri" data-auth="signin">Sign in with Google</button></div><div class="note">Team members only. Use the Google account that's on the access list.</div>${a.err ? `<div class="err">${esc(a.err)}</div>` : ""}`);
+  if (a.kind === "denied") return hero(`<p>You're signed in as <b>${esc(a.email)}</b>, but this account isn't on the access list. Ask the owner to add it, then reload.</p><div class="acts"><button class="btn" data-auth="signout">Use a different account</button></div>`);
+  if (a.kind === "error") return hero(`<p>Couldn't reach the database: ${esc(a.msg)}</p><div class="acts"><button class="btn" onclick="location.reload()">Try again</button></div>`);
+  return hero(`<p>Opening the desk…</p>`);
 };
-const showAuth = (s) => { authState = s; const m = document.getElementById("main"); if (m) m.innerHTML = window.__authScreen(); };
+const showAuth = (s) => { authState = s; const m = document.getElementById("main"); if (m) { m.innerHTML = window.__authScreen(); window.__mountDNA && window.__mountDNA(); } };
 
 if (!firebaseConfig || !firebaseConfig.apiKey || /PASTE/i.test(firebaseConfig.apiKey)) { showAuth({ kind: "setup" }); throw new Error("Firebase config missing"); }
 
