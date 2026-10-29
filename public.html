@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Nucleate – Technion Branch</title>
+<meta name="description" content="Biotech events, opportunities and news for Technion students, from the Nucleate Technion Branch.">
+<meta name="theme-color" content="#10223B">
+<link rel="icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Hebrew:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: helix hero band, then two columns (upcoming events · suggest form), then the issue archive. */
+:root{--bg:#F3F6F9;--surface:#fff;--sunk:#E9EEF3;--ink:#0F1D2E;--muted:#58697C;--line:#D8E0E8;--band:#10223B;--band-ink:#EAF2FA;--band-muted:#9FB3C8;--accent:#0C8C7E;--accent-ink:#fff;--accent-soft:#DCF2EE;--coral:#D9503B;--helix-a:#36C3B0;--helix-b:#F2735E;--helix-rung:#6E86A3;
+  --display:"Bricolage Grotesque","IBM Plex Sans",system-ui,sans-serif;--body:"IBM Plex Sans","IBM Plex Sans Hebrew",system-ui,-apple-system,"Segoe UI",sans-serif;--mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0A121C;--surface:#111C29;--sunk:#0D1722;--ink:#E5EDF5;--muted:#8FA1B4;--line:#223142;--band:#08111C;--accent:#3CCFBC;--accent-ink:#06201C;--accent-soft:#0F302C;--coral:#FF7C66;--helix-rung:#4A607A;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0A121C;--surface:#111C29;--sunk:#0D1722;--ink:#E5EDF5;--muted:#8FA1B4;--line:#223142;--band:#08111C;--accent:#3CCFBC;--accent-ink:#06201C;--accent-soft:#0F302C;--coral:#FF7C66;--helix-rung:#4A607A;color-scheme:dark}
+*{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 var(--body)} img{max-width:100%} [hidden]{display:none!important}
+a{color:var(--accent)} :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.wrap{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));max-width:1120px;margin:0 auto}
+.hero{position:relative;overflow:hidden;background:var(--band);color:var(--band-ink)}
+.hero canvas{position:absolute;inset:0;width:100%;height:100%}
+.hero .in{position:relative;padding-block:56px 48px;max-width:640px}
+.kicker{font-family:var(--mono);font-size:12px;color:var(--helix-a);letter-spacing:.08em}
+h1{font-family:var(--display);font-weight:800;font-size:clamp(36px,7vw,68px);line-height:1;margin:10px 0 14px;letter-spacing:-.02em;text-wrap:balance}
+h1 .dash{color:var(--helix-b)}
+.hero p{margin:0;color:var(--band-muted);max-width:48ch}
+.hero .acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:18px}
+.btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:9px 14px;border-radius:9px;cursor:pointer;font:inherit;font-weight:500;text-decoration:none}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.hero .btn{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.2);color:var(--band-ink)} .hero .btn.pri{background:var(--helix-a);border-color:var(--helix-a);color:#06201C;font-weight:600}
+@media (max-width:640px){.hero .in{padding-top:170px}}
+main{padding-block:28px 64px}
+h2{font-family:var(--display);font-weight:800;font-size:24px;margin:0 0 4px}
+.sub{color:var(--muted);margin:0 0 16px}
+.grid{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:20px;margin-bottom:28px;align-items:start}
+@media (max-width:860px){.grid{grid-template-columns:1fr}}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;min-width:0}
+.ev{display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-top:1px solid var(--line)} .ev:first-child{border-top:0}
+.dt{width:50px;flex:none;text-align:center;border-radius:10px;background:var(--sunk);padding:5px 0;line-height:1.1}
+.dt .d{font-family:var(--display);font-weight:800;font-size:20px} .dt .m{font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.ev .t{font-weight:600;overflow-wrap:anywhere} .ev .s{font-size:13px;color:var(--muted);overflow-wrap:anywhere}
+label{display:flex;flex-direction:column;gap:5px;font-size:13px;color:var(--muted);font-weight:500;margin-bottom:12px}
+input,textarea{font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:9px 11px;min-width:0;width:100%}
+input:focus,textarea:focus{border-color:var(--accent);outline:none;box-shadow:0 0 0 3px var(--accent-soft)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px} @media (max-width:420px){.two{grid-template-columns:1fr}}
+.hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
+.msg{padding:10px 12px;border-radius:9px;background:var(--accent-soft);margin-top:8px} .msg.err{background:#FBE5E0;color:#7a2a1d}
+details.issue{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-bottom:10px}
+details.issue summary{cursor:pointer;display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+details.issue summary b{font-family:var(--display);font-size:17px}
+.bubble{background:#E7FFDB;color:#111B21;border-radius:4px 12px 12px 12px;padding:12px 14px;white-space:pre-wrap;unicode-bidi:plaintext;text-align:start;overflow-wrap:anywhere;font-size:14px;line-height:1.5;margin-top:12px}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .bubble{background:#005C4B;color:#E9EDEF}} :root[data-theme="dark"] .bubble{background:#005C4B;color:#E9EDEF}
+.empty{color:var(--muted);padding:6px 0}
+footer{color:var(--muted);font-size:13px;padding-block:20px 40px;border-top:1px solid var(--line)}
+</style>
+</head>
+<body>
+<section class="hero"><canvas class="dna" data-x0="0.55" aria-hidden="true"></canvas><div class="wrap"><div class="in">
+  <div class="kicker">BIOTECH · STARTUPS · RESEARCH</div>
+  <h1>Nucleate <span class="dash">–</span> Technion Branch</h1>
+  <p>Events, opportunities and news for students interested in biotech, from our weekly WhatsApp digest.</p>
+  <div class="acts"><a class="btn pri" href="#suggest">Suggest an event or opportunity</a><a class="btn" href="#issues">Past issues</a></div>
+</div></div></section>
+<main class="wrap">
+  <div class="grid">
+    <div class="panel"><h2>Coming up</h2><p class="sub">From recent issues of the digest.</p><div id="upcoming"><div class="empty">Loading…</div></div></div>
+    <form class="panel" id="suggest" novalidate>
+      <h2>Suggest something</h2><p class="sub">Know about an event, grant, job or program students should hear about? Send it to the team. We review every suggestion.</p>
+      <label>What is it? *<input id="sTitle" dir="auto" required maxlength="200" placeholder="e.g. Biotech founders panel"></label>
+      <label>Link<input id="sUrl" type="url" maxlength="500" placeholder="https://…"></label>
+      <div class="two"><label>Date<input id="sDate" type="date"></label><label>Where<input id="sLoc" dir="auto" maxlength="200" placeholder="Campus, city, or Online"></label></div>
+      <label>Anything else we should know?<textarea id="sNote" rows="3" dir="auto" maxlength="1000"></textarea></label>
+      <label>Your name (optional)<input id="sName" dir="auto" maxlength="100"></label>
+      <div class="hp" aria-hidden="true"><label>Leave this empty<input id="sHp" tabindex="-1" autocomplete="off"></label></div>
+      <button class="btn pri" type="submit">Send suggestion</button><div id="sMsg"></div>
+    </form>
+  </div>
+  <section id="issues"><h2>Past issues</h2><p class="sub">Every issue we've sent to the group.</p><div id="issueList"><div class="empty">Loading…</div></div></section>
+</main>
+<footer class="wrap">Nucleate Technion Branch · <a href="./">Team sign-in</a></footer>
+
+<script>
+// DNA helix (same drawing as the team site)
+(() => { const cvs=[...document.querySelectorAll("canvas.dna")]; const reduce=matchMedia("(prefers-reduced-motion: reduce)").matches; const t0=performance.now();
+  function draw(cv,t){ const r=cv.getBoundingClientRect(), dpr=Math.min(2,devicePixelRatio||1); if(!r.width) return; if(cv.width!==Math.round(r.width*dpr)){cv.width=Math.round(r.width*dpr);cv.height=Math.round(r.height*dpr);}
+    const g=cv.getContext("2d"); g.setTransform(dpr,0,0,dpr,0,0); g.clearRect(0,0,r.width,r.height); const cs=getComputedStyle(cv); const A=cs.getPropertyValue("--helix-a").trim(),B=cs.getPropertyValue("--helix-b").trim(),R=cs.getPropertyValue("--helix-rung").trim();
+    const W=r.width,H=r.height,narrow=W<640; const x0=narrow?-40:W*parseFloat(cv.dataset.x0||".5"), cy=narrow?Math.min(H*.2,90):H*.5, amp=narrow?36:Math.min(H*.3,80), k=Math.PI*2/(narrow?210:270), tilt=narrow?0:-.1; const pts=[];
+    for(let x=x0;x<=W+40;x+=4){const ph=k*x+t; pts.push({x,y1:cy+tilt*(x-x0)+amp*Math.sin(ph),y2:cy+tilt*(x-x0)+amp*Math.sin(ph+Math.PI),z1:Math.cos(ph),z2:-Math.cos(ph)});}
+    for(let i=0;i<pts.length;i+=6){const p=pts[i]; g.strokeStyle=R; g.globalAlpha=.5*(.4+.6*Math.abs(Math.sin(k*p.x+t))); g.lineWidth=2; g.beginPath(); g.moveTo(p.x,p.y1); g.lineTo(p.x,p.y2); g.stroke();}
+    for(const pass of [0,1]) for(const [key,zk,col] of [["y1","z1",A],["y2","z2",B]]) for(let i=1;i<pts.length;i++){const a=pts[i-1],b=pts[i],front=b[zk]>0; if((pass===1)!==front) continue; g.strokeStyle=col; g.globalAlpha=front?1:.35; g.lineWidth=front?5:3.5; g.lineCap="round"; g.beginPath(); g.moveTo(a.x,a[key]); g.lineTo(b.x,b[key]); g.stroke();}
+    for(let i=0;i<pts.length;i+=6){const p=pts[i]; for(const [y,z,c] of [[p.y1,p.z1,A],[p.y2,p.z2,B]]){ if(z<=.2) continue; g.globalAlpha=1; g.fillStyle=c; g.beginPath(); g.arc(p.x,y,3+2*z,0,Math.PI*2); g.fill(); }} g.globalAlpha=1; }
+  function loop(n){ cvs.forEach(c=>draw(c,(n-t0)/1600)); if(!reduce) requestAnimationFrame(loop); } requestAnimationFrame(loop); addEventListener("resize",()=>cvs.forEach(c=>draw(c,0)));
+})();
+</script>
+<script type="module">
+import { firebaseConfig } from "./firebase-config.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getFirestore, collection, getDocs, addDoc, query, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const safe = u => /^https?:\/\//i.test(u || "") ? u : "";
+const parseD = s => { const d = new Date(s + "T00:00:00"); return isNaN(d) ? null : d; };
+const waHtml = t => esc(t).replace(/\*([^*\n]+)\*/g, "<b>$1</b>").replace(/(^|[\s(])_([^_\n]+)_/g, "$1<i>$2</i>").replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
+const db = getFirestore(initializeApp(firebaseConfig));
+try {
+  const snap = await getDocs(query(collection(db, "published"), orderBy("number", "desc"), limit(40)));
+  const issues = snap.docs.map(d => d.data());
+  document.getElementById("issueList").innerHTML = issues.length ? issues.map((is, i) => `<details class="issue" ${i === 0 ? "open" : ""}><summary><b>Issue #${is.number}</b><span class="sub" style="margin:0">${new Date(is.sentAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}</span></summary><div class="bubble" dir="auto">${waHtml(is.text || "")}</div></details>`).join("") : `<div class="empty">The first issue hasn't been published yet.</div>`;
+  const today = new Date(); today.setHours(0, 0, 0, 0); const seen = new Set();
+  const ev = issues.flatMap(is => is.events || []).filter(e => { const d = parseD(e.date); const k = e.title + "|" + e.date; if (!d || d < today || seen.has(k)) return false; seen.add(k); return true; }).sort((a, b) => a.date < b.date ? -1 : 1);
+  document.getElementById("upcoming").innerHTML = ev.length ? ev.slice(0, 12).map(e => { const d = parseD(e.date); const u = safe(e.url);
+    return `<div class="ev"><div class="dt"><div class="d">${d.getDate()}</div><div class="m">${d.toLocaleDateString("en-GB", { month: "short" })}</div></div><div style="min-width:0"><div class="t" dir="auto">${u ? `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(e.title)}</a>` : esc(e.title)}</div><div class="s" dir="auto">${esc(d.toLocaleDateString("en-GB", { weekday: "long" }))}${e.location ? " · " + esc(e.location) : ""}</div>${e.summary ? `<div class="s" dir="auto">${esc(e.summary)}</div>` : ""}</div></div>`; }).join("") : `<div class="empty">No upcoming events right now. Check back after the next issue.</div>`;
+} catch (e) {
+  document.getElementById("issueList").innerHTML = document.getElementById("upcoming").innerHTML = `<div class="empty">Couldn't load right now. Try again in a moment.</div>`;
+}
+const form = document.getElementById("suggest"), msg = document.getElementById("sMsg"); let sent = 0;
+form.addEventListener("submit", async e => {
+  e.preventDefault(); const v = id => document.getElementById(id).value.trim();
+  if (v("sHp")) return; // spam trap
+  if (v("sTitle").length < 3) { msg.innerHTML = `<div class="msg err">Tell us what it is (at least a few words).</div>`; return; }
+  if (sent >= 3) { msg.innerHTML = `<div class="msg err">Thanks! You've sent a few already. Please wait a bit before sending more.</div>`; return; }
+  const url = v("sUrl"); if (url && !safe(url)) { msg.innerHTML = `<div class="msg err">Links should start with https://</div>`; return; }
+  const btn = form.querySelector("button[type=submit]"); btn.disabled = true;
+  try { await addDoc(collection(db, "suggestions"), { title: v("sTitle").slice(0, 200), url: url.slice(0, 500), date: v("sDate"), location: v("sLoc").slice(0, 200), note: v("sNote").slice(0, 1000), name: v("sName").slice(0, 100), createdAt: Date.now() });
+    sent++; form.reset(); msg.innerHTML = `<div class="msg">Thanks, the team got it. If it fits, you'll see it in an upcoming issue.</div>`; }
+  catch (er) { msg.innerHTML = `<div class="msg err">Couldn't send it. Check your connection and try again.</div>`; }
+  btn.disabled = false;
+});
+</script>
+</body>
+</html>

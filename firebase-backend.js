@@ -5,6 +5,10 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/fireba
 import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signInWithRedirect, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, getDoc, setDoc, updateDoc, deleteDoc, addDoc, onSnapshot, query, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
+// The site owner: always an admin. Must match ownerEmail() in the Firestore rules.
+const OWNER_EMAIL = "scharfdan2000@gmail.com";
+window.__ownerEmail = OWNER_EMAIL;
+
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 let authState = { kind: "loading" };
 window.__authScreen = () => {
@@ -12,7 +16,7 @@ window.__authScreen = () => {
   const hero = (body) => `<section class="hero landing"><canvas class="dna" data-x0="0.56" aria-hidden="true"></canvas><div class="hx"><div class="kicker">NEWSLETTER DESK</div><h1>Nucleate <span class="dash">–</span> Technion Branch</h1>${body}</div></section>`;
   if (a.kind === "setup") return hero(`<p>Almost there: paste your Firebase settings into <code>firebase-config.js</code>, upload it to GitHub, and reload this page.</p>`);
   if (a.kind === "signin") return hero(`<p>Collect what's happening in biotech around campus, decide together, and send the weekly digest to the group.</p><div class="acts"><button class="btn pri" data-auth="signin">Sign in with Google</button></div><div class="note">Team members only. Use the Google account that's on the access list.</div>${a.err ? `<div class="err">${esc(a.err)}</div>` : ""}`);
-  if (a.kind === "denied") return hero(`<p>You're signed in as <b>${esc(a.email)}</b>, but this account isn't on the access list. Ask the owner to add it, then reload.</p><div class="acts"><button class="btn" data-auth="signout">Use a different account</button></div>`);
+  if (a.kind === "denied") return hero(`<p>You're signed in as <b>${esc(a.email)}</b>, but this account isn't on the team yet. Ask an admin to add it on the Team page, then reload.</p><div class="acts"><button class="btn" data-auth="signout">Use a different account</button></div>`);
   if (a.kind === "error") return hero(`<p>Couldn't reach the database: ${esc(a.msg)}</p><div class="acts"><button class="btn" onclick="location.reload()">Try again</button></div>`);
   return hero(`<p>Opening the desk…</p>`);
 };
@@ -75,7 +79,7 @@ onAuthStateChanged(auth, async u => {
     window.dispatchEvent(new CustomEvent("people-changed", { detail: Object.keys(usersCache) }));
   }, () => { });
   const user = {
-    id: async () => u.uid, isOwner: async () => false, canEdit: async () => true, can: async () => true,
+    id: async () => u.uid, email: async () => (u.email || "").toLowerCase(), isOwner: async () => (u.email || "").toLowerCase() === OWNER_EMAIL, canEdit: async () => true, can: async () => true,
     me: async () => profileOf(u.uid, u.uid) || { id: u.uid, name: u.displayName || "", avatarUrl: u.photoURL || initialsAvatar(u.displayName, u.uid), color: "#888", email: u.email, isOwner: false, canEdit: true },
     profiles: async ids => { const out = {}; (Array.isArray(ids) ? ids : [ids]).forEach(id => { const p = profileOf(id, u.uid); if (p) out[id] = p; }); return out; },
   };
