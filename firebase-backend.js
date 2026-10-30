@@ -2,7 +2,7 @@
 // The app talks to a small "db" and "user" interface; this file provides both on top of Firebase.
 import { firebaseConfig } from "./firebase-config.js";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signInWithRedirect, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, getDoc, setDoc, updateDoc, deleteDoc, addDoc, onSnapshot, query, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 // The site owner: always an admin. Must match ownerEmail() in the Firestore rules.
@@ -11,11 +11,16 @@ window.__ownerEmail = OWNER_EMAIL;
 
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 let authState = { kind: "loading" };
+// Google blocks sign-in inside apps' built-in browsers (WhatsApp, Instagram, Facebook, LinkedIn, Telegram...).
+const UA = navigator.userAgent || "";
+const IN_APP = /FBAN|FBAV|FB_IAB|Instagram|LinkedInApp|Line\/|Telegram|Snapchat|TikTok|musical_ly|Twitter|MicroMessenger|; wv\)|WhatsApp/i.test(UA);
+const IS_IOS = /iPhone|iPad|iPod/i.test(UA);
+const inAppHelp = () => `<div class="err" style="display:block;max-width:520px">You opened this inside another app's browser, where Google doesn't allow sign-in.<br><b>${IS_IOS ? "Tap ⋯ or the Share icon → Open in Safari." : "Tap ⋮ → Open in Chrome (or “Open in browser”)."}</b><br><button class="btn" data-auth="copylink" style="margin-top:8px">Copy link</button> then paste it into ${IS_IOS ? "Safari" : "Chrome"}.</div>`;
 window.__authScreen = () => {
   const a = authState;
   const hero = (body) => `<section class="hero landing"><canvas class="dna" data-x0="0.56" aria-hidden="true"></canvas><div class="hx"><div class="kicker">NEWSLETTER DESK</div><h1>Nucleate <span class="dash">–</span> Technion Branch</h1>${body}</div></section>`;
   if (a.kind === "setup") return hero(`<p>Almost there: paste your Firebase settings into <code>firebase-config.js</code>, upload it to GitHub, and reload this page.</p>`);
-  if (a.kind === "signin") return hero(`<p>Collect what's happening in biotech around campus, decide together, and send the weekly digest to the group.</p><div class="acts"><button class="btn pri" data-auth="signin">Sign in with Google</button></div><div class="note">Team members only. Use the Google account that's on the access list.</div>${a.err ? `<div class="err">${esc(a.err)}</div>` : ""}`);
+  if (a.kind === "signin") return hero(`<p>Collect what's happening in biotech around campus, decide together, and send the weekly digest to the group.</p><div class="acts"><button class="btn pri" data-auth="signin">Sign in with Google</button></div><div class="note">Team members only. Use the Google account that's on the access list.</div>${IN_APP ? inAppHelp() : ""}${a.err ? `<div class="err">${a.errHtml ? a.err : esc(a.err)}</div>` : ""}`);
   if (a.kind === "denied") return hero(`<p>You're signed in as <b>${esc(a.email)}</b>, but this account isn't on the team yet. Ask an admin to add it on the Team page, then reload.</p><div class="acts"><button class="btn" data-auth="signout">Use a different account</button></div>`);
   if (a.kind === "error") return hero(`<p>Couldn't reach the database: ${esc(a.msg)}</p><div class="acts"><button class="btn" onclick="location.reload()">Try again</button></div>`);
   return hero(`<p>Opening the desk…</p>`);
@@ -90,10 +95,14 @@ onAuthStateChanged(auth, async u => {
 document.addEventListener("click", async e => {
   const t = e.target.closest("[data-auth]"); if (!t) return;
   if (t.dataset.auth === "signout") { await signOut(auth); return; }
+  if (t.dataset.auth === "copylink") { const url = location.origin + location.pathname; try { await navigator.clipboard.writeText(url); t.textContent = "Link copied ✓"; } catch { prompt && t.insertAdjacentHTML("afterend", `<div style="user-select:all;margin-top:6px">${esc(url)}</div>`); } return; }
   const provider = new GoogleAuthProvider(); provider.setCustomParameters({ prompt: "select_account" });
   try { await signInWithPopup(auth, provider); }
   catch (er) {
-    if (er && (er.code === "auth/popup-blocked" || er.code === "auth/operation-not-supported-in-this-environment")) return signInWithRedirect(auth, provider);
+    // Never fall back to a full-page redirect: on GitHub Pages it lands people on Firebase's own site instead of coming back.
+    if (er && (er.code === "auth/popup-blocked" || er.code === "auth/operation-not-supported-in-this-environment" || er.code === "auth/web-storage-unsupported"))
+      return showAuth({ kind: "signin", errHtml: true, err: IN_APP ? "Sign-in can't open inside this app. Open the site in your normal browser (see above)." : "Your browser blocked the Google sign-in window. Allow pop-ups for this site (a blocked-pop-up icon usually appears in the address bar) and tap “Sign in with Google” again. If you opened the link from WhatsApp or Instagram, open it in Safari or Chrome instead." });
+    if (er && er.code === "auth/network-request-failed") return showAuth({ kind: "signin", err: "Couldn't reach Google. Check your connection and try again." });
     if (er && er.code === "auth/unauthorized-domain") return showAuth({ kind: "signin", err: "This website address isn't approved in Firebase yet. In Firebase → Authentication → Settings → Authorized domains, add " + location.hostname + "." });
     if (er && er.code !== "auth/popup-closed-by-user" && er.code !== "auth/cancelled-popup-request") showAuth({ kind: "signin", err: "Sign-in failed: " + (er.message || er.code) });
   }
