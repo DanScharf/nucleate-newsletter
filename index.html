@@ -138,7 +138,7 @@ h3{font-family:var(--display);font-weight:600;font-size:16px;margin:0}
 .tile{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;text-decoration:none;color:inherit;display:flex;flex-direction:column;gap:2px;box-shadow:var(--shadow);min-width:0}
 .tile:hover{border-color:var(--accent)}
 .tile .v{font-family:var(--display);font-weight:800;font-size:30px;font-variant-numeric:tabular-nums;line-height:1.1}
-.tile .v.small{font-size:17px;font-weight:600;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tile .v.small{font-size:17px;font-weight:600;line-height:1.3;overflow-wrap:anywhere}
 .tile .l{font-size:12.5px;color:var(--muted)}
 .home-grid{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:16px}
 @media (max-width:900px){.home-grid{grid-template-columns:1fr}}
@@ -278,6 +278,30 @@ details.more[open] summary{margin-bottom:12px}
 b.men{color:var(--accent)}
 .toast{display:flex;gap:12px;align-items:center}
 .toast button{background:transparent;border:1px solid currentColor;color:inherit;border-radius:7px;padding:2px 9px;cursor:pointer;font-weight:600}
+
+/* event planner */
+.crumbs{margin-bottom:10px;font-size:13px}
+.crumbs a{color:var(--muted);text-decoration:none} .crumbs a:hover{color:var(--accent)}
+.evhead{display:flex;gap:16px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--m-plan);border-radius:var(--r);padding:16px;margin-bottom:14px;box-shadow:var(--shadow)}
+.evtitle{display:flex;gap:12px;align-items:flex-start;min-width:0;flex:1 1 320px}
+.evtitle .ic{font-size:30px;line-height:1}
+.evtitle h2{margin-bottom:8px;overflow-wrap:anywhere}
+.evtitle .meta{display:flex;flex-wrap:wrap;gap:6px}
+.evtabs{display:flex;overflow-x:auto;max-width:100%;flex-wrap:nowrap;scrollbar-width:none}
+.evtabs::-webkit-scrollbar{display:none}
+.evtabs button{white-space:nowrap}
+.tpl{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
+.tpl input{position:absolute;opacity:0;pointer-events:none}
+.tpl label{display:flex;flex-direction:column;gap:2px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;cursor:pointer;background:var(--surface);color:var(--ink);font-weight:400}
+.tpl label .ic{font-size:20px} .tpl label b{font-size:13.5px} .tpl label span:last-child{font-size:12px;color:var(--muted)}
+.tpl input:checked+label{border-color:var(--m-plan);box-shadow:0 0 0 2px color-mix(in srgb,var(--m-plan) 35%,transparent)}
+.tpl input:focus-visible+label{outline:2px solid var(--accent);outline-offset:2px}
+.btable{display:flex;flex-direction:column;gap:6px;overflow-x:auto}
+.bh,.br{display:grid;grid-template-columns:minmax(140px,2fr) 110px 110px minmax(110px,1fr) 44px 36px;gap:8px;align-items:center;min-width:600px}
+.bh{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600;padding:0 2px}
+.br{border-top:1px solid var(--line);padding-top:6px}
+.br input[type=checkbox]{width:18px;height:18px;accent-color:var(--accent);justify-self:center}
+.evtask select,.evtask input[type=date]{flex:0 1 auto}
 @media (prefers-reduced-motion:no-preference){.drawer{animation:slide .18s ease-out}@keyframes slide{from{transform:translateX(24px);opacity:.6}}}
 </style>
 </head>

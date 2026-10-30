@@ -1,0 +1,120 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ───────── Who is who ─────────
+    // The owner is always an admin and can never be locked out.
+    function ownerEmail() { return 'scharfdan2000@gmail.com'; }
+
+    // Everyone else is managed on the site's Team page (stored in meta/access).
+    function signedIn() { return request.auth != null && request.auth.token.email_verified == true; }
+    function email() { return request.auth.token.email.lower(); }
+    function accessDoc() { return /databases/$(database)/documents/meta/access; }
+    function access() { return exists(accessDoc()) ? get(accessDoc()).data : {}; }
+    function isOwner() { return signedIn() && email() == ownerEmail(); }
+    function isAdmin() { return isOwner() || (signedIn() && email() in access().get('admins', [])); }
+    function isMember() { return isAdmin() || (signedIn() && email() in access().get('members', [])); }
+    function uid() { return request.auth.uid; }
+    function changedOnly(keys) { return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys); }
+    function str(v, max) { return v is string && v.size() <= max; }
+
+    // ───────── Team list and settings ─────────
+    match /meta/{doc} {
+      allow read: if isMember();
+      allow write: if isAdmin();
+    }
+
+    // ───────── Newsletter items ─────────
+    // Admins and the person who added it can edit anything (including moving it to the Trash).
+    // Other members can vote, comment, claim it, move it between stages (not to Archived) and reorder it.
+    match /items/{id} {
+      allow read: if isMember();
+      allow create: if isAdmin() || (isMember() && request.resource.data.addedBy == uid());
+      allow update: if isAdmin() || (isMember() && resource.data.addedBy == uid())
+        || (isMember()
+            && changedOnly(['votes', 'comments', 'status', 'order', 'owner', 'updatedAt', 'updatedBy'])
+            && (request.resource.data.get('status', '') == resource.data.get('status', '') || request.resource.data.get('status', '') != 'archived'));
+      allow delete: if isAdmin() || (isMember() && resource.data.addedBy == uid());
+    }
+
+    // ───────── Calendar entries, including repeating ones (anyone on the team can RSVP) ─────────
+    match /meetings/{id} {
+      allow read: if isMember();
+      allow create: if isAdmin() || (isMember() && request.resource.data.createdBy == uid());
+      allow update: if isAdmin() || (isMember() && resource.data.createdBy == uid())
+        || (isMember() && changedOnly(['rsvp', 'orsvp', 'updatedAt', 'updatedBy']));
+      allow delete: if isAdmin() || (isMember() && resource.data.createdBy == uid());
+    }
+
+    // ───────── Tasks (anyone on the team can tick a task done) ─────────
+    match /tasks/{id} {
+      allow read: if isMember();
+      allow create: if isAdmin() || (isMember() && request.resource.data.createdBy == uid());
+      allow update: if isAdmin() || (isMember() && resource.data.createdBy == uid())
+        || (isMember() && changedOnly(['done', 'doneAt', 'doneBy', 'updatedAt', 'updatedBy']));
+      allow delete: if isAdmin() || (isMember() && resource.data.createdBy == uid());
+    }
+
+    // ───────── Event planner (the lead, creator and event team edit; anyone ticks the checklist) ─────────
+    match /plans/{id} {
+      allow read: if isMember();
+      allow create: if isAdmin() || (isMember() && request.resource.data.createdBy == uid());
+      allow update: if isAdmin() || (isMember() && (resource.data.createdBy == uid() || resource.data.get('lead', '') == uid() || uid() in resource.data.get('team', [])))
+        || (isMember() && changedOnly(['checklist', 'updatedAt', 'updatedBy']));
+      allow delete: if isAdmin() || (isMember() && resource.data.createdBy == uid());
+    }
+
+    // ───────── Contacts ─────────
+    match /contacts/{id} {
+      allow read: if isMember();
+      allow create: if isAdmin() || (isMember() && request.resource.data.createdBy == uid());
+      allow update: if isAdmin() || (isMember() && (resource.data.createdBy == uid() || resource.data.get('owner', '') == uid()));
+      allow delete: if isAdmin() || (isMember() && resource.data.createdBy == uid());
+    }
+
+    // ───────── Source library (members can only mark "checked") ─────────
+    match /sources/{id} {
+      allow read: if isMember();
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || (isMember() && changedOnly(['lastChecked', 'lastCheckedBy']));
+    }
+
+    // ───────── Sent issues (team copy) ─────────
+    match /issues/{id} {
+      allow read: if isMember();
+      allow write: if isAdmin();
+    }
+
+    // ───────── Public page: published issues anyone can read ─────────
+    match /published/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ───────── Public page: suggestions anyone can send, only the team can read ─────────
+    match /suggestions/{id} {
+      allow create: if request.resource.data.keys().hasOnly(['title', 'url', 'date', 'location', 'name', 'note', 'createdAt'])
+        && str(request.resource.data.title, 200) && request.resource.data.title.size() >= 3
+        && str(request.resource.data.get('url', ''), 500)
+        && str(request.resource.data.get('date', ''), 10)
+        && str(request.resource.data.get('location', ''), 200)
+        && str(request.resource.data.get('name', ''), 100)
+        && str(request.resource.data.get('note', ''), 1000)
+        && request.resource.data.createdAt is number;
+      allow read, update, delete: if isMember();
+    }
+
+    // ───────── Activity feed ─────────
+    match /activity/{id} {
+      allow read: if isMember();
+      allow create: if isMember() && request.resource.data.by == uid();
+      allow update, delete: if isAdmin();
+    }
+
+    // ───────── People (each person keeps their own name/photo up to date) ─────────
+    match /users/{userId} {
+      allow read: if isMember();
+      allow write: if isMember() && userId == uid();
+    }
+  }
+}

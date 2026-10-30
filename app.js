@@ -71,7 +71,7 @@ const roleOf = email => email===ownerEmail()? "Owner" : accessList("admins").inc
 const canEditItem = it => S.canWrite && (!it || isAdmin() || it.addedBy===S.meId);
 const canEditMeet = mt => S.canWrite && (!mt || isAdmin() || mt.createdBy===S.meId);
 const canEditTask = t => S.canWrite && (!t || isAdmin() || t.createdBy===S.meId);
-const canEditPlan = p => S.canWrite && (!p || isAdmin() || p.createdBy===S.meId || p.lead===S.meId);
+const canEditPlan = p => S.canWrite && (!p || isAdmin() || p.createdBy===S.meId || p.lead===S.meId || (p.team||[]).includes(S.meId));
 const canEditContact = c => S.canWrite && (!c || isAdmin() || c.createdBy===S.meId || c.owner===S.meId);
 const titleOf = (col,x) => x.title || x.name || "Untitled";
 const titleCase = s => s.charAt(0).toUpperCase()+s.slice(1);
@@ -107,7 +107,7 @@ async function purgeOld(){ if(S.purged||!isAdmin()) return; S.purged=true; const
 const whenExists = (col,id) => new Promise(res=>{ let n=0; const tick=()=>{ if(S[col].some(x=>x.id===id)||++n>40) return res(); setTimeout(tick,50); }; tick(); });
 // ───────── render loop ─────────
 let raf=0; function render(){ cancelAnimationFrame(raf); raf=requestAnimationFrame(doRender); }
-function views(){ const v=[["home","Home"],["board","Pipeline"],["issue","This issue"],["calendar","Calendar"],["tasks","Tasks"],["events","Our events"],["contacts","Contacts"],["sources","Sources"],["places","Places"],["team","Team"],["archive","Archive"]];
+function views(){ const v=[["home","Home"],["board","Pipeline"],["issue","This issue"],["calendar","Calendar"],["tasks","Tasks"],["events","Event planner"],["contacts","Contacts"],["sources","Sources"],["places","Places"],["team","Team"],["archive","Archive"]];
   if(A("suggestions").length) v.splice(1,0,["inbox","Suggestions"]); return v; }
 function doRender(){
   $("#who").innerHTML = S.meId ? avImg(S.meId)+`<span>${esc(nameOf(S.meId))}</span>${S.myEmail&&roleOf(S.myEmail)?`<span class="chip" style="background:rgba(255,255,255,.1);color:var(--band-ink)">${esc(roleOf(S.myEmail))}</span>`:""}` : "";
@@ -115,17 +115,20 @@ function doRender(){
   const myOpen=A("tasks").filter(t=>!t.done&&t.assignee===S.meId).length;
   const counts = {board:A("items").filter(i=>i.status!=="archived").length, calendar:upcoming(30).length, places:A("items").filter(i=>i.status!=="archived"&&i.location).length, issue:A("items").filter(i=>i.status==="issue").length,
     sources:S.sources.length, archive:S.issues.length, tasks:myOpen, events:A("plans").filter(p=>p.stage!=="done").length, contacts:A("contacts").length, inbox:A("suggestions").length};
-  $("#tabs").innerHTML = S.db ? views().map(([k,l])=>`<a href="#${k}" ${S.view===k?'aria-current="page"':""}>${l}${counts[k]?`<span class="n">${counts[k]}</span>`:""}</a>`).join("") : "";
+  $("#tabs").innerHTML = S.db ? views().map(([k,l])=>`<a href="#${k}" ${S.view===k||(S.view==="event"&&k==="events")?'aria-current="page"':""}>${l}${counts[k]?`<span class="n">${counts[k]}</span>`:""}</a>`).join("") : "";
   const m=$("#main");
   if(!S.db){ m.innerHTML = window.__authScreen ? window.__authScreen() : `<div class="empty"><b>Opening the desk…</b></div>`; window.__mountDNA&&window.__mountDNA(); return; }
   const banner = S.canWrite ? "" : `<div class="banner">Your account can't save changes. Ask an admin to add you on the Team page.</div>`;
-  const v = {home:vHome,inbox:vInbox,board:vBoard,calendar:vCalendar,tasks:vTasks,events:vEvents,contacts:vContacts,places:vPlaces,issue:vIssue,sources:vSources,team:vTeam,archive:vArchive,trash:vTrash}[S.view]||vHome;
-  const y=window.scrollY; const ae=document.activeElement; const keepId=ae&&ae.id&&m.contains(ae)&&/^(quickUrl|cq|tTitle|accEmail)$/.test(ae.id)?ae.id:null; const keepVal=keepId?ae.value:null;
+  const v = {event:vEvent,home:vHome,inbox:vInbox,board:vBoard,calendar:vCalendar,tasks:vTasks,events:vEvents,contacts:vContacts,places:vPlaces,issue:vIssue,sources:vSources,team:vTeam,archive:vArchive,trash:vTrash}[S.view]||vHome;
+  // Keep whatever someone is typing when live updates from teammates re-draw the page.
+  const y=window.scrollY; const ae=document.activeElement; const focusKey=ae&&m.contains(ae)?fieldKey(ae):null; let sel=null; try{ sel=focusKey&&ae.selectionStart!=null?[ae.selectionStart,ae.selectionEnd]:null; }catch{}
+  const edited={}; m.querySelectorAll("input,textarea,select").forEach(el=>{ const k=fieldKey(el); if(!k) return; if(el.type==="checkbox"||el.type==="radio"){ if(el.checked!==el.defaultChecked) edited[k]={c:el.checked}; } else if(el.tagName==="SELECT"){ const o=el.options[el.selectedIndex]; if(o&&!o.defaultSelected&&el.dataset.dirty) edited[k]={v:el.value}; } else if(el.value!==el.defaultValue) edited[k]={v:el.value}; });
   m.innerHTML = banner + v(); window.scrollTo(0,y);
-  if(keepId&&$("#"+keepId)){ const el=$("#"+keepId); el.value=keepVal; el.focus(); try{ el.setSelectionRange(keepVal.length,keepVal.length); }catch{} }
+  m.querySelectorAll("input,textarea,select").forEach(el=>{ const k=fieldKey(el); if(!k) return; const e=edited[k]; if(e){ if("c" in e) el.checked=e.c; else el.value=e.v; if(el.tagName==="SELECT") el.dataset.dirty="1"; } if(k===focusKey){ el.focus(); try{ if(sel) el.setSelectionRange(sel[0],sel[1]); }catch{} } });
   window.__mountDNA&&window.__mountDNA();
   renderDrawer(); refreshProfiles(); purgeOld();
 }
+function fieldKey(el){ if(el.type==="file"||el.type==="search"&&false) return null; if(el.id) return "#"+el.id; const f=el.closest("form"); const ds=el.dataset; const tag=Object.keys(ds).filter(k=>k!=="dirty").map(k=>k+"="+ds[k]).join("&"); if(tag) return "@"+tag; if(f&&el.name) return (f.id||f.className+":"+Object.values(f.dataset).join(","))+"/"+el.name; return null; }
 let profT=0; function refreshProfiles(){
   if(!S.user) return; const ids=people().filter(id=>!S.profiles[id]); if(!ids.length) return;
   clearTimeout(profT); profT=setTimeout(async()=>{ try{ const ps=await S.user.profiles(ids); let ch=false; for(const id in ps){ if(!S.profiles[id]||S.profiles[id].name!==ps[id].name){S.profiles[id]=ps[id]; ch=true;} } if(ch) render(); }catch{} },50);
@@ -133,21 +136,43 @@ let profT=0; function refreshProfiles(){
 
 // ───────── calendar data ─────────
 const PLAN_COLOR="var(--m-plan)";
-function entries(){
+const REPEATS=[["none","Doesn't repeat"],["weekly","Every week"],["biweekly","Every 2 weeks"],["monthly","Every month, same date"],["monthly-wd","Every month, same weekday"]];
+const REPEAT=Object.fromEntries(REPEATS);
+const isSeries = mt => mt && mt.repeat && mt.repeat!=="none";
+const shiftS = (s,n) => { const d=parseD(s); d.setDate(d.getDate()+n); return ymd(d); };
+function addMonthsClamp(d,n){ const r=new Date(d.getFullYear(),d.getMonth()+n,1); const last=new Date(r.getFullYear(),r.getMonth()+1,0).getDate(); r.setDate(Math.min(d.getDate(),last)); return r; }
+function nthWeekday(base,n){ const wd=base.getDay(), nth=Math.floor((base.getDate()-1)/7); const r=new Date(base.getFullYear(),base.getMonth()+n,1); let day=1+((wd-r.getDay()+7)%7)+7*nth; const last=new Date(r.getFullYear(),r.getMonth()+1,0).getDate(); if(day>last) day-=7; r.setDate(day); return r; }
+const ordinal = n => ["1st","2nd","3rd","4th","5th"][n]||n+"th";
+function repeatLabel(mt){ if(!isSeries(mt)) return ""; const d=parseD(mt.date); let l=REPEAT[mt.repeat]||"Repeats";
+  if(mt.repeat==="weekly") l="Every "+d.toLocaleDateString("en-GB",{weekday:"long"}); else if(mt.repeat==="biweekly") l="Every other "+d.toLocaleDateString("en-GB",{weekday:"long"});
+  else if(mt.repeat==="monthly"){ const n=d.getDate(); l="Monthly on the "+n+((n%10===1&&n!==11)?"st":(n%10===2&&n!==12)?"nd":(n%10===3&&n!==13)?"rd":"th"); }
+  else if(mt.repeat==="monthly-wd") l="Monthly on the "+ordinal(Math.floor((d.getDate()-1)/7))+" "+d.toLocaleDateString("en-GB",{weekday:"long"});
+  return l+(mt.until?" until "+fmtD(mt.until):""); }
+// Original dates ("keys") of a series between from and to.
+function seriesKeys(mt, from, to){ const start=parseD(mt.date); if(!start) return []; if(!isSeries(mt)) return (mt.date>=from&&mt.date<=to)?[mt.date]:[];
+  const out=[]; for(let i=0;i<800;i++){ let d; if(mt.repeat==="weekly"){ d=new Date(start); d.setDate(start.getDate()+7*i); } else if(mt.repeat==="biweekly"){ d=new Date(start); d.setDate(start.getDate()+14*i); } else if(mt.repeat==="monthly") d=addMonthsClamp(start,i); else d=nthWeekday(start,i);
+    const k=ymd(d); if((mt.until&&k>mt.until)||k>to) break; if(k>=from) out.push(k); } return out; }
+// One meeting date: series defaults plus any change made to that date only.
+function occOf(mt, key){ const ex=isSeries(mt)?((mt.exceptions||{})[key]||{}):{}; return {key,date:ex.date||key,time:ex.time!==undefined&&ex.time!==null?ex.time:(mt.time||""),endTime:ex.endTime!==undefined&&ex.endTime!==null?ex.endTime:(mt.endTime||""),notes:ex.notes||"",skipped:ex.skipped===true,moved:!!(ex.date&&ex.date!==key),changed:!!(ex.date||ex.time!=null||ex.endTime!=null)}; }
+function occurrences(mt, from, to){ if(!isSeries(mt)) return mt.date?[occOf(mt,mt.date)]:[];
+  return seriesKeys(mt, shiftS(from,-120), shiftS(to,120)).map(k=>occOf(mt,k)).filter(o=>!o.skipped&&o.date>=from&&o.date<=to); }
+function entries(from, to){
+  from=from||shiftS(todayS(),-200); to=to||shiftS(todayS(),400);
   const out=[];
   A("items").forEach(i=>{ if(i.date) out.push({kind:"item",id:i.id,date:i.date,time:"",title:i.title,sub:[tlabel(i.type),i.location].filter(Boolean).join(" · "),color:tcol(i.type),archived:i.status==="archived",loc:i.location,url:i.url}); });
-  A("meetings").forEach(mt=>{ if(mt.date) out.push({kind:"meeting",id:mt.id,date:mt.date,time:mt.time||"",endTime:mt.endTime||"",title:mt.title,sub:[MKIND[mt.kind]?.label||"Meeting",mt.time?mt.time+(mt.endTime?"–"+mt.endTime:""):"",mt.location].filter(Boolean).join(" · "),color:(MKIND[mt.kind]||MKIND.other).color,loc:mt.location,notes:mt.agenda||mt.notes}); });
+  A("meetings").forEach(mt=>{ if(!mt.date) return; const ser=isSeries(mt); occurrences(mt,from,to).forEach(o=>out.push({kind:"meeting",id:mt.id,occ:ser?o.key:"",date:o.date,time:o.time,endTime:o.endTime,title:mt.title,
+    sub:[(ser?"↻ ":"")+(MKIND[mt.kind]?.label||"Meeting"),o.time?o.time+(o.endTime?"–"+o.endTime:""):"",mt.location,o.moved?"moved from "+fmtD(o.key):""].filter(Boolean).join(" · "),color:(MKIND[mt.kind]||MKIND.other).color,loc:mt.location,notes:[mt.agenda,o.notes].filter(Boolean).join("\n")})); });
   A("plans").forEach(p=>{ if(p.date) out.push({kind:"plan",id:p.id,date:p.date,time:p.time||"",title:p.title,sub:["Our event · "+(PSTAGE[p.stage]||"Idea"),p.time,p.location].filter(Boolean).join(" · "),color:PLAN_COLOR,loc:p.location}); });
   return out.sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:(a.time||"99")<(b.time||"99")?-1:1);
 }
 function upcoming(days){ const t=todayS(); const e=new Date(today()); e.setDate(e.getDate()+days); const end=ymd(e); return entries().filter(x=>!x.archived&&x.date>=t&&x.date<=end); }
-const entryAttr = x => x.kind==="item"?`data-open="${esc(x.id)}"`:x.kind==="plan"?`data-plan="${esc(x.id)}"`:`data-meet="${esc(x.id)}"`;
+const entryAttr = x => x.kind==="item"?`data-open="${esc(x.id)}"`:x.kind==="plan"?`data-plan="${esc(x.id)}"`:`data-meet="${esc(x.id)}"${x.occ?` data-occ="${esc(x.occ)}"`:""}`;
 function agendaRow(x){ const d=parseD(x.date); return `<div class="ag" ${entryAttr(x)} style="--tc:${x.color}" role="button" tabindex="0"><span class="bar"></span><div class="dt"><div class="d">${d.getDate()}</div><div class="m">${d.toLocaleDateString("en-GB",{month:"short"})}</div></div><div class="bd"><div class="t" dir="auto">${esc(x.title)}</div><div class="s" dir="auto">${esc(DOW[d.getDay()])} · ${esc(x.sub)}</div></div></div>`; }
 function icsExport(){
-  const e=entries().filter(x=>!x.archived); const stampNow=new Date().toISOString().replace(/[-:]/g,"").replace(/\.\d+/,"");
+  const e=entries(shiftS(todayS(),-60),shiftS(todayS(),365)).filter(x=>!x.archived); const stampNow=new Date().toISOString().replace(/[-:]/g,"").replace(/\.\d+/,"");
   const fold=s=>String(s||"").replace(/\\/g,"\\\\").replace(/;/g,"\\;").replace(/,/g,"\\,").replace(/\r?\n/g,"\\n");
   const lines=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//Nucleate Technion//Desk//EN","CALSCALE:GREGORIAN","X-WR-CALNAME:Nucleate Technion"];
-  e.forEach(x=>{ const d=x.date.replace(/-/g,""); lines.push("BEGIN:VEVENT",`UID:${x.kind}-${x.id}@nucleate-technion`,`DTSTAMP:${stampNow}`);
+  e.forEach(x=>{ const d=x.date.replace(/-/g,""); lines.push("BEGIN:VEVENT",`UID:${x.kind}-${x.id}${x.occ?"-"+x.occ:""}@nucleate-technion`,`DTSTAMP:${stampNow}`);
     if(x.time){ const st=d+"T"+x.time.replace(":","")+"00"; let et=x.endTime? d+"T"+x.endTime.replace(":","")+"00" : null; if(!et){ const [h,m]=x.time.split(":").map(Number); const t=new Date(2000,0,1,h+1,m); et=d+"T"+z2(t.getHours())+z2(t.getMinutes())+"00"; }
       lines.push(`DTSTART;TZID=Asia/Jerusalem:${st}`,`DTEND;TZID=Asia/Jerusalem:${et}`); }
     else { const n=parseD(x.date); n.setDate(n.getDate()+1); lines.push(`DTSTART;VALUE=DATE:${d}`,`DTEND;VALUE=DATE:${ymd(n).replace(/-/g,"")}`); }
@@ -178,14 +203,14 @@ function actRow(a){ return `<div class="ev-row">${avImg(a.by)}<div class="txt"><
 
 // tasks
 function taskRow(t, ctx){
-  const link = !ctx && t.meetingId ? (()=>{ const m=S.meetings.find(x=>x.id===t.meetingId); return m?`<a href="#" data-meet="${esc(m.id)}" class="hint">📅 ${esc(m.title)}</a>`:""; })()
+  const link = !ctx && t.meetingId ? (()=>{ const m=S.meetings.find(x=>x.id===t.meetingId); return m?`<a href="#" data-meet="${esc(m.id)}"${t.occurrence?` data-occ="${esc(t.occurrence)}"`:""} class="hint">📅 ${esc(m.title)}${t.occurrence?" · "+esc(fmtD(occOf(m,t.occurrence).date)):""}</a>`:""; })()
              : !ctx && t.planId ? (()=>{ const p=S.plans.find(x=>x.id===t.planId); return p?`<a href="#" data-plan="${esc(p.id)}" class="hint">🎪 ${esc(p.title)}</a>`:""; })() : "";
   return `<div class="task ${t.done?"done":""}"><input type="checkbox" data-done="${esc(t.id)}" ${t.done?"checked":""} ${S.canWrite?"":"disabled"} aria-label="Done"><div class="grow"><a href="#" class="t" data-task="${esc(t.id)}" dir="auto">${esc(t.title)}</a><div class="meta">${t.assignee?`${avImg(t.assignee)}<span>${esc(firstName(t.assignee))}</span>`:`<span>Unassigned</span>`}${dueChip(t.due,t.done)}${link}</div></div></div>`;
 }
 function taskAddForm(ctxAttr){ return S.canWrite? `<form class="taskAdd" ${ctxAttr||""}><input name="title" placeholder="Add a task…" aria-label="Task" dir="auto" ${ctxAttr?"":'id="tTitle"'}><select name="assignee" aria-label="Assign to">${peopleOpts(S.meId,"Unassigned")}</select><input name="due" type="date" aria-label="Due date"><button class="btn" type="submit">Add</button></form>` : ""; }
 async function addTask(form){ const f=new FormData(form); const title=String(f.get("title")||"").trim(); if(!title){ toast("Write the task first."); return; }
-  const data={title,assignee:String(f.get("assignee")||""),due:String(f.get("due")||""),done:false,notes:"",meetingId:form.dataset.meeting||"",planId:form.dataset.plan||"",createdBy:S.meId,createdAt:Date.now(),...stamp()};
-  const id=await add("tasks",data); if(id){ form.reset(); const a=form.querySelector('[name=assignee]'); if(a) a.value=S.meId; logAct(data.assignee&&data.assignee!==S.meId?`gave ${firstName(data.assignee)} a task:`:"added a task:",title); toast("Task added."); } }
+  const data={title,assignee:String(f.get("assignee")||""),due:String(f.get("due")||""),done:false,notes:"",meetingId:form.dataset.meeting||"",occurrence:form.dataset.occ||"",planId:form.dataset.forplan||form.dataset.plan||"",section:String(f.get("section")||""),relDays:null,createdBy:S.meId,createdAt:Date.now(),...stamp()};
+  const id=await add("tasks",data); if(id){ form.reset(); form.querySelectorAll("select").forEach(x=>delete x.dataset.dirty); const a=form.querySelector('[name=assignee]'); if(a&&!form.dataset.forplan) a.value=S.meId; logAct(data.assignee&&data.assignee!==S.meId?`gave ${firstName(data.assignee)} a task:`:"added a task:",title); toast("Task added."); } }
 async function toggleTask(id){ const t=S.tasks.find(x=>x.id===id); if(!t) return; const done=!t.done; if(await upd("tasks",id,{done,doneAt:done?Date.now():null,doneBy:done?S.meId:null,...stamp()})&&done) logAct("finished",t.title); }
 
 // mentions
@@ -194,7 +219,8 @@ function mentionChips(target){ return `<div class="mention-row"><span class="hin
 function forYou(){
   const out=[]; const since=Date.now()-14*864e5;
   A("items").forEach(i=>Object.values(i.comments||{}).forEach(c=>{ if(c.at>since&&c.by!==S.meId&&(c.mentions||[]).includes(S.meId)) out.push({at:c.at,html:`${avImg(c.by)}<div class="txt"><b>${esc(firstName(c.by))}</b> mentioned you on <a href="#" data-open="${esc(i.id)}" dir="auto">${esc(i.title)}</a><div class="hint" dir="auto">“${esc(c.text.slice(0,120))}”</div></div>`}); }));
-  A("meetings").forEach(m=>{ const d=daysTo(m.date); if(d!==null&&d>=0&&d<=7&&!(m.rsvp||{})[S.meId]) out.push({at:Date.now()-d*1000,html:`<span class="dot" style="color:${(MKIND[m.kind]||MKIND.other).color};margin:8px"></span><div class="txt">Are you coming to <a href="#" data-meet="${esc(m.id)}" dir="auto">${esc(m.title)}</a>? <span class="hint">${esc(fmtDW(m.date))}${m.time?" "+esc(m.time):""}</span></div>`}); });
+  upcoming(7).filter(x=>x.kind==="meeting").forEach(x=>{ const m=S.meetings.find(y=>y.id===x.id); const r=x.occ?((m.orsvp||{})[x.occ]||{}):(m.rsvp||{}); if(r[S.meId]) return; const d=daysTo(x.date);
+    out.push({at:Date.now()-d*1000,html:`<span class="dot" style="color:${x.color};margin:8px"></span><div class="txt">Are you coming to <a href="#" ${entryAttr(x)} dir="auto">${esc(m.title)}</a>? <span class="hint">${esc(fmtDW(x.date))}${x.time?" "+esc(x.time):""}</span></div>`}); });
   return out.sort((a,b)=>b.at-a.at);
 }
 
@@ -261,7 +287,8 @@ function vBoard(){
 
 function vCalendar(){
   const {y,m}=S.cal; const first=new Date(y,m,1); const start=new Date(first); start.setDate(1-first.getDay());
-  const byDate={}; entries().forEach(x=>{ (byDate[x.date]=byDate[x.date]||[]).push(x); });
+  const gEnd=new Date(start); gEnd.setDate(start.getDate()+41);
+  const byDate={}; entries(ymd(start),ymd(gEnd)).forEach(x=>{ (byDate[x.date]=byDate[x.date]||[]).push(x); });
   const t=todayS(); const sel=S.cal.sel;
   let cells=""; for(let i=0;i<42;i++){ const d=new Date(start); d.setDate(start.getDate()+i); if(i===35&&d.getMonth()!==m) break; const k=ymd(d); const es=byDate[k]||[];
     cells+=`<button class="day ${d.getMonth()!==m?"out":""} ${k===t?"today":""} ${k===sel?"sel":""}" data-day="${k}" aria-label="${esc(d.toDateString())}${es.length?", "+plural(es.length,"entry","entries"):""}"><span class="num">${d.getDate()}</span>
@@ -298,17 +325,6 @@ function vTasks(){
     <div class="panel" style="margin-bottom:14px">${taskAddForm()||`<div class="hint">You can't add tasks with this account.</div>`}</div>
     <div class="seg" role="tablist">${[["mine","Mine"],["all",`All open (${open.length})`],["done","Done"]].map(([k,l])=>`<button role="tab" aria-selected="${f===k}" data-tf="${k}">${l}</button>`).join("")}</div>${body}`;
 }
-
-function planCard(p){ const ck=Object.values(p.checklist||{}); const dn=ck.filter(c=>c.done).length; const ns=PSTAGES[PSTAGES.findIndex(x=>x[0]===(p.stage||"idea"))+1];
-  return `<div class="card" data-plan="${esc(p.id)}" style="--tc:var(--m-plan)"><div class="meta">${p.date?`<span class="chip ${daysTo(p.date)>=0&&daysTo(p.date)<=7?"soon":""}">🗓 ${esc(fmtDW(p.date))}</span>`:`<span class="chip">No date yet</span>`}${p.itemId?`<span class="chip ok">In newsletter</span>`:""}</div>
-    <div class="t" dir="auto">${esc(p.title)}</div>${p.location?`<div class="meta" dir="auto">📍 ${esc(p.location)}</div>`:""}
-    ${ck.length?`<div class="prog" title="${dn} of ${ck.length} done"><span style="width:${Math.round(100*dn/ck.length)}%"></span></div><div class="meta">${dn}/${ck.length} checklist</div>`:""}
-    <div class="foot"><div class="meta">${p.lead?avImg(p.lead)+`<span>${esc(firstName(p.lead))} leads</span>`:"<span>No lead yet</span>"}</div>${ns&&canEditPlan(p)?`<div class="votes"><button data-pnext="${esc(p.id)}" title="Move to ${esc(ns[1])}" aria-label="Move to ${esc(ns[1])}">→</button></div>`:""}</div></div>`; }
-function vEvents(){ const ps=A("plans");
-  return `<h2>Our events</h2><p class="sub">Events the branch is organizing, from first idea to done. Each one has a lead, a checklist and its own tasks.</p>
-    ${S.canWrite?`<div class="toolbar"><button class="btn pri" data-act="new-plan">+ New event idea</button></div>`:""}
-    <div class="board" style="grid-template-columns:repeat(4,minmax(230px,1fr))">${PSTAGES.map(([k,l])=>{ const cs=ps.filter(p=>(p.stage||"idea")===k).sort((a,b)=>(a.date||"9")<(b.date||"9")?-1:1);
-      return `<section class="col"><div class="col-h"><h3>${l}</h3><span class="c">${cs.length}</span></div>${cs.map(planCard).join("")||`<div class="colempty">${k==="idea"?"Throw ideas in here.":"Nothing here."}</div>`}</section>`; }).join("")}</div>`; }
 
 function vContacts(){ const {q,kind}=S.cf; const ql=q.trim().toLowerCase();
   const list=A("contacts").filter(c=>(!kind||c.kind===kind)&&(!ql||[c.name,c.org,c.role,c.email,c.notes].join(" ").toLowerCase().includes(ql))).sort((a,b)=>(a.name||"").localeCompare(b.name||""));
@@ -511,46 +527,68 @@ async function submitItem(){
 }
 
 // meeting
-function openMeeting(id, date){ const mt=id? S.meetings.find(x=>x.id===id) : null; if(id&&!mt) return;
-  openD("meeting",{id:id||null,base:mt?(mt.updatedAt||0):0,draft:Object.assign({title:"",kind:"meeting",date:date||todayS(),time:"",endTime:"",location:"",agenda:"",notes:""},mt?JSON.parse(JSON.stringify(mt)):{})}); }
-function rsvpHtml(mt){ const r=mt.rsvp||{}; const mine=r[S.meId]; const grp={yes:[],maybe:[],no:[]}; Object.entries(r).forEach(([u,v])=>grp[v]&&grp[v].push(u));
+function openMeeting(id, date, occ){ const mt=id? S.meetings.find(x=>x.id===id) : null; if(id&&!mt) return;
+  if(mt&&isSeries(mt)&&!occ){ const next=seriesKeys(mt,todayS(),shiftS(todayS(),400)).find(k=>!occOf(mt,k).skipped); occ=next||mt.date; }
+  openD("meeting",{id:id||null,occ:mt&&isSeries(mt)?occ:"",base:mt?(mt.updatedAt||0):0,draft:Object.assign({title:"",kind:"meeting",date:date||todayS(),time:"",endTime:"",location:"",agenda:"",notes:"",repeat:"none",until:""},mt?JSON.parse(JSON.stringify(mt)):{})}); }
+function rsvpMap(mt, occ){ return occ? ((mt.orsvp||{})[occ]||{}) : (mt.rsvp||{}); }
+function rsvpHtml(mt, occ){ const r=rsvpMap(mt,occ); const mine=r[S.meId]; const grp={yes:[],maybe:[],no:[]}; Object.entries(r).forEach(([u,v])=>grp[v]&&grp[v].push(u));
   return `<div class="seg" style="margin:0">${[["yes","Going"],["maybe","Maybe"],["no","Can't make it"]].map(([k,l])=>`<button type="button" data-rsvp="${k}" aria-pressed="${mine===k}" ${S.canWrite?"":"disabled"}>${l}${grp[k].length?` · ${grp[k].length}`:""}</button>`).join("")}</div>
     <div class="hint" style="margin-top:6px">${[["yes","Going"],["maybe","Maybe"],["no","Can't"]].filter(([k])=>grp[k].length).map(([k,l])=>`${l}: ${grp[k].map(u=>esc(firstName(u))).join(", ")}`).join(" · ")||"No replies yet."}</div>`; }
+function skippedHtml(mt){ const sk=Object.entries(mt.exceptions||{}).filter(([k,v])=>v&&v.skipped===true).map(([k])=>k).sort();
+  return sk.length?`<div class="hint">Skipped: ${sk.map(k=>`${esc(fmtDW(k))}${canEditMeet(mt)?` <a href="#" data-unskip="${esc(k)}">restore</a>`:""}`).join(" · ")}</div>`:""; }
+function seriesFields(d, dis){ return `<div class="grid2"><label class="f">Repeats<select id="mRepeat" ${dis}>${REPEATS.map(([k,l])=>`<option value="${k}" ${(d.repeat||"none")===k?"selected":""}>${l}</option>`).join("")}</select></label>
+  <label class="f" ${(d.repeat||"none")==="none"?"hidden":""} id="mUntilWrap">Until (optional)<input id="mUntil" type="date" value="${esc(d.until||"")}" ${dis}></label></div>`; }
 function drawMeeting(key, live){
-  const D=S.drawer, d=D.draft, mt=D.id?S.meetings.find(x=>x.id===D.id):null;
-  if(live){ if(mt){ const r=$("#rsvpBox"); if(r) r.innerHTML=rsvpHtml(mt); const a=$("#actList"); if(a) a.innerHTML=actionList(mt); const s=$("#staleBox"); if(s) s.innerHTML=staleHtml(mt); } return; }
+  const D=S.drawer, d=D.draft, mt=D.id?S.meetings.find(x=>x.id===D.id):null; const ser=isSeries(mt)&&D.occ; const o=ser?occOf(mt,D.occ):null;
+  if(live){ if(mt){ const r=$("#rsvpBox"); if(r) r.innerHTML=rsvpHtml(mt,ser?D.occ:""); const a=$("#actList"); if(a) a.innerHTML=actionList(mt,ser?D.occ:""); const s=$("#staleBox"); if(s) s.innerHTML=staleHtml(mt); const k=$("#skipList"); if(k) k.innerHTML=skippedHtml(mt); } return; }
   const ro=!canEditMeet(mt), dis=ro?"disabled":"";
-  return shell(key,"Calendar entry",`
-    <div class="dh"><h2>${D.id?"Calendar entry":"Add to the calendar"}</h2><button class="btn ghost" data-act="close" aria-label="Close">✕</button></div>
-    ${mt?`<div class="hint">Added by ${esc(nameOf(mt.createdBy))} ${mt.createdAt?agoPhrase(mt.createdAt):""}${ro&&S.canWrite?" · only they or an admin can edit the details":""}</div>`:""}
-    <div id="staleBox">${staleHtml(mt)}</div>
-    ${mt?`<div class="box"><h3>Are you coming?</h3><div id="rsvpBox">${rsvpHtml(mt)}</div></div>`:""}
-    <form class="box" id="meetForm" novalidate>
+  const seriesForm = `<form class="box" id="meetForm" novalidate>
+      ${ser?`<h3>Whole series</h3><div class="hint">Changes here apply to every date. Dates you moved or skipped keep their changes.</div>`:""}
       <label class="f"><span class="lh">What<span class="req">*</span></span><input id="mTitle" dir="auto" value="${esc(d.title)}" placeholder="Weekly sync · Call with BioHub" ${dis} data-autofocus></label>
       <div class="typepick" role="radiogroup" aria-label="Kind">${MKINDS.map(([k,l,c])=>`<input type="radio" name="mKind" id="mk-${k}" value="${k}" ${d.kind===k?"checked":""} ${dis}><label for="mk-${k}" style="--tc:var(${c})"><span class="dot"></span>${l}</label>`).join("")}</div>
       <div class="grid2">
-        <label class="f"><span class="lh">Date<span class="req">*</span></span><input id="mDate" type="date" value="${esc(d.date)}" ${dis}></label>
+        <label class="f"><span class="lh">${isSeries(d)?"First date":"Date"}<span class="req">*</span></span><input id="mDate" type="date" value="${esc(d.date)}" ${dis}></label>
         <label class="f">Start<input id="mTime" type="time" value="${esc(d.time)}" ${dis}></label>
         <label class="f">End<input id="mEnd" type="time" value="${esc(d.endTime)}" ${dis}></label>
       </div>
+      ${seriesFields(d,dis)}
       <label class="f">Where<input id="mLoc" dir="auto" value="${esc(d.location)}" placeholder="Room, building, or a Zoom / Meet link" ${dis}></label>
-      <label class="f">Agenda<textarea id="mAgenda" rows="3" dir="auto" placeholder="What we'll cover" ${dis}>${esc(d.agenda)}</textarea></label>
-      ${D.id?`<label class="f">Notes<textarea id="mNotes" rows="4" dir="auto" placeholder="What was decided" ${dis}>${esc(d.notes)}</textarea></label>`:""}
+      <label class="f">Agenda<textarea id="mAgenda" rows="3" dir="auto" placeholder="${ser?"What every meeting covers":"What we'll cover"}" ${dis}>${esc(d.agenda)}</textarea></label>
+      ${D.id&&!ser?`<label class="f">Notes<textarea id="mNotes" rows="4" dir="auto" placeholder="What was decided" ${dis}>${esc(d.notes)}</textarea></label>`:""}
+      ${ser?`<div id="skipList">${skippedHtml(mt)}</div>`:""}
       <div id="mErr"></div>
-      <div class="toolbar" style="margin:0">${ro?"":`<button class="btn pri" type="submit">${D.id?"Save changes":"Add to calendar"}</button>`}${mt?`<a class="btn" target="_blank" rel="noopener" href="${esc(gcalUrl({title:mt.title,date:mt.date,time:mt.time,endTime:mt.endTime,location:mt.location,details:mt.agenda}))}">+ Google Calendar</a>`:""}<span style="flex:1"></span>${mt&&!ro?`<button type="button" class="btn ghost danger" data-act="del">Delete</button>`:""}</div>
-      ${ro?"":delBlock("Move this entry to the Trash?")}
-    </form>
-    ${mt?`<div class="box"><h3>Action items</h3><div id="actList">${actionList(mt)}</div>${taskAddForm(`data-meeting="${esc(mt.id)}"`)}</div>`:""}`);
+      <div class="toolbar" style="margin:0">${ro?"":`<button class="btn pri" type="submit">${D.id?(ser?"Save whole series":"Save changes"):"Add to calendar"}</button>`}${mt&&!ser?`<a class="btn" target="_blank" rel="noopener" href="${esc(gcalUrl({title:mt.title,date:mt.date,time:mt.time,endTime:mt.endTime,location:mt.location,details:mt.agenda}))}">+ Google Calendar</a>`:""}<span style="flex:1"></span>${mt&&!ro?`<button type="button" class="btn ghost danger" data-act="del">${ser?"Delete whole series":"Delete"}</button>`:""}</div>
+      ${ro?"":delBlock(ser?"Move the whole series (every date) to the Trash?":"Move this entry to the Trash?")}
+    </form>`;
+  const occBox = ser? `<form class="box" id="occForm" novalidate><h3>This date only</h3>
+      ${o.moved?`<div class="hint">Moved from ${esc(fmtDW(o.key))}.</div>`:""}
+      <div class="grid2"><label class="f">Date<input id="oDate" type="date" value="${esc(o.date)}" ${dis}></label><label class="f">Start<input id="oTime" type="time" value="${esc(o.time)}" ${dis}></label><label class="f">End<input id="oEnd" type="time" value="${esc(o.endTime)}" ${dis}></label></div>
+      <label class="f">Notes for this meeting<textarea id="oNotes" rows="3" dir="auto" placeholder="What was decided" ${dis}>${esc(o.notes)}</textarea></label>
+      ${ro?"":`<div class="toolbar" style="margin:0"><button class="btn pri" type="submit">Save this date only</button><button type="button" class="btn" data-act="occ-skip">Skip this date</button>${o.changed?`<button type="button" class="btn ghost" data-act="occ-reset">Undo changes to this date</button>`:""}<span style="flex:1"></span><a class="btn" target="_blank" rel="noopener" href="${esc(gcalUrl({title:mt.title,date:o.date,time:o.time,endTime:o.endTime,location:mt.location,details:mt.agenda}))}">+ Google Calendar</a></div>`}
+    </form>` : "";
+  return shell(key,"Calendar entry",`
+    <div class="dh"><h2>${mt?esc(mt.title):"Add to the calendar"}</h2><button class="btn ghost" data-act="close" aria-label="Close">✕</button></div>
+    ${mt?`<div class="hint">${ser?`↻ ${esc(repeatLabel(mt))} · this date: <b>${esc(fmtDW(o.date))}${o.time?" "+esc(o.time):""}</b> · `:""}Added by ${esc(nameOf(mt.createdBy))} ${mt.createdAt?agoPhrase(mt.createdAt):""}${ro&&S.canWrite?" · only they or an admin can edit the details":""}</div>`:""}
+    <div id="staleBox">${staleHtml(mt)}</div>
+    ${mt?`<div class="box"><h3>Are you coming${ser?" on "+esc(fmtDW(o.date)):""}?</h3><div id="rsvpBox">${rsvpHtml(mt,ser?D.occ:"")}</div></div>`:""}
+    ${occBox}
+    ${mt?`<div class="box"><h3>Action items${ser?" from this date":""}</h3><div id="actList">${actionList(mt,ser?D.occ:"")}</div>${taskAddForm(`data-meeting="${esc(mt.id)}"${ser?` data-occ="${esc(D.occ)}"`:""}`)}</div>`:""}
+    ${ser?`<details class="box more"><summary>Edit the whole series</summary>${seriesForm}</details>`:seriesForm}`);
 }
-function actionList(mt){ const ts=A("tasks").filter(t=>t.meetingId===mt.id); return ts.length?`<div class="tasks">${ts.map(t=>taskRow(t,true)).join("")}</div>`:`<div class="colempty">No action items yet. Add who does what before you leave the meeting.</div>`; }
-function readMeeting(){ const d=S.drawer.draft; const k=document.querySelector('input[name="mKind"]:checked'); Object.assign(d,{title:$("#mTitle").value.trim(),kind:k?k.value:"meeting",date:$("#mDate").value,time:$("#mTime").value,endTime:$("#mEnd").value,location:$("#mLoc").value.trim(),agenda:$("#mAgenda").value.trim(),notes:$("#mNotes")?$("#mNotes").value.trim():(d.notes||"")}); return d; }
+function actionList(mt, occ){ const ts=A("tasks").filter(t=>t.meetingId===mt.id&&(!occ||t.occurrence===occ)); return ts.length?`<div class="tasks">${ts.map(t=>taskRow(t,true)).join("")}</div>`:`<div class="colempty">No action items yet. Add who does what before you leave the meeting.</div>`; }
+function readMeeting(){ const d=S.drawer.draft; const k=document.querySelector('input[name="mKind"]:checked'); Object.assign(d,{title:$("#mTitle").value.trim(),kind:k?k.value:"meeting",date:$("#mDate").value,time:$("#mTime").value,endTime:$("#mEnd").value,repeat:$("#mRepeat").value,until:$("#mRepeat").value==="none"?"":$("#mUntil").value,location:$("#mLoc").value.trim(),agenda:$("#mAgenda").value.trim(),notes:$("#mNotes")?$("#mNotes").value.trim():(d.notes||"")}); return d; }
 async function submitMeeting(){
   const D=S.drawer, d=readMeeting(); if(!d.title||!d.date){ $("#mErr").innerHTML=`<div class="dup">Add ${!d.title&&!d.date?"a title and a date":!d.title?"a title":"a date"} first.</div>`; return; }
-  const data={title:d.title,kind:d.kind,date:d.date,time:d.time,endTime:d.endTime,location:d.location,agenda:d.agenda,notes:d.notes,...stamp()};
+  if(d.until&&d.until<d.date){ $("#mErr").innerHTML=`<div class="dup">"Until" has to be after the first date.</div>`; return; }
+  const data={title:d.title,kind:d.kind,date:d.date,time:d.time,endTime:d.endTime,repeat:d.repeat||"none",until:d.until||"",location:d.location,agenda:d.agenda,notes:d.notes,...stamp()};
   if(D.id){ if(await upd("meetings",D.id,data)){ logAct("updated meeting",d.title); closeDrawer(); toast("Saved."); } }
-  else { const id=await add("meetings",Object.assign(data,{rsvp:{},createdBy:S.meId,createdAt:Date.now()})); if(id){ logAct(d.kind==="idea"?"added an event idea:":"scheduled",d.title+" · "+fmtDW(d.date)); closeDrawer(); toast("Added to the calendar."); } }
+  else { const id=await add("meetings",Object.assign(data,{rsvp:{},orsvp:{},exceptions:{},createdBy:S.meId,createdAt:Date.now()})); if(id){ logAct(d.kind==="idea"?"added an event idea:":"scheduled",d.title+" · "+(isSeries(data)?repeatLabel(data):fmtDW(d.date))); closeDrawer(); toast(isSeries(data)?`Added to the calendar: ${repeatLabel(data).charAt(0).toLowerCase()+repeatLabel(data).slice(1)}.`:"Added to the calendar."); } }
 }
-
+async function submitOcc(){ const D=S.drawer, mt=S.meetings.find(x=>x.id===D.id); const key=D.occ;
+  const date=$("#oDate").value||key, time=$("#oTime").value, endTime=$("#oEnd").value, notes=$("#oNotes").value.trim();
+  const ex={skipped:false,notes}; if(date!==key) ex.date=date; else ex.date=null; ex.time=time!==(mt.time||"")?time:null; ex.endTime=endTime!==(mt.endTime||"")?endTime:null;
+  if(await upd("meetings",mt.id,{exceptions:{[key]:ex},...stamp()})){ if(date!==key) logAct(`moved ${fmtD(key)} to ${fmtD(date)}:`,mt.title); closeDrawer(); toast(date!==key?`Moved to ${fmtDW(date)}. The rest of the series stays the same.`:"Saved for this date."); }
+}
 // task
 function openTask(id){ const t=S.tasks.find(x=>x.id===id); if(!t) return; openD("task",{id,base:t.updatedAt||0,draft:JSON.parse(JSON.stringify(t))}); }
 function drawTask(key, live){
@@ -570,40 +608,177 @@ async function submitTask(){ const D=S.drawer; const title=$("#kTitle").value.tr
   const prev=S.tasks.find(x=>x.id===D.id); const assignee=$("#kAss").value;
   if(await upd("tasks",D.id,{title,assignee,due:$("#kDue").value,notes:$("#kNotes").value.trim(),...stamp()})){ if(prev&&prev.assignee!==assignee&&assignee) logAct(`gave ${firstName(assignee)} a task:`,title); closeDrawer(); toast("Saved."); } }
 
-// plan (our events)
-function openPlan(id, date){ const p=id? S.plans.find(x=>x.id===id) : null; if(id&&!p) return;
-  openD("plan",{id:id||null,base:p?(p.updatedAt||0):0,draft:Object.assign({title:"",stage:"idea",date:date||"",time:"",location:"",lead:S.meId,link:"",blurb:"",notes:""},p?JSON.parse(JSON.stringify(p)):{})}); }
-function checklistHtml(p, ro){ const ck=Object.entries(p.checklist||{}).sort((a,b)=>(a[1].at||0)-(b[1].at||0));
-  return (ck.length?`<div class="tasks">${ck.map(([k,c])=>`<div class="task ${c.done?"done":""}"><input type="checkbox" data-ck="${esc(k)}" ${c.done?"checked":""} ${S.canWrite?"":"disabled"} aria-label="Done"><div class="grow"><span class="t" dir="auto">${esc(c.text)}</span>${c.done&&c.by?`<div class="meta"><span>${esc(firstName(c.by))}</span></div>`:""}</div>${ro?"":`<button type="button" class="btn sm ghost" data-ckdel="${esc(k)}" aria-label="Remove">✕</button>`}</div>`).join("")}</div>`:`<div class="colempty">No checklist yet.</div>`)
-    +(S.canWrite?`<form id="ckForm" style="display:flex;gap:8px;margin-top:8px"><input id="ckText" placeholder="Add a checklist step…" dir="auto" style="flex:1"><button class="btn" type="submit">Add</button></form>`:""); }
-function drawPlan(key, live){
-  const D=S.drawer, d=D.draft, p=D.id?S.plans.find(x=>x.id===D.id):null;
-  if(live){ if(p){ const c=$("#ckBox"); if(c&&document.activeElement?.id!=="ckText") c.innerHTML=checklistHtml(p,!canEditPlan(p)); const t=$("#ptasks"); if(t) t.innerHTML=planTasks(p); const s=$("#staleBox"); if(s) s.innerHTML=staleHtml(p); } return; }
-  const ro=!canEditPlan(p), dis=ro?"disabled":"";
-  return shell(key,"Our event",`<div class="dh"><h2>${p?"Our event":"New event idea"}</h2><button class="btn ghost" data-act="close" aria-label="Close">✕</button></div>
-    ${p?`<div class="hint">Added by ${esc(nameOf(p.createdBy))} ${p.createdAt?agoPhrase(p.createdAt):""}${ro&&S.canWrite?" · only the lead, its creator or an admin can edit the details; anyone can tick the checklist":""}</div>`:""}
-    <div id="staleBox">${staleHtml(p)}</div>
+// plan (our events) ─ full event planner
+const EV_SECTIONS = ["General","Venue & logistics","Content & speakers","Marketing","Registration","Budget & sponsors","Follow-up"];
+const EV_ROLES = [["lead","Lead"],["logistics","Venue & logistics"],["content","Content & speakers"],["marketing","Marketing"],["registration","Registration"],["budget","Budget & sponsors"]];
+const SECTION_ROLE = {"General":"lead","Venue & logistics":"logistics","Content & speakers":"content","Marketing":"marketing","Registration":"registration","Budget & sponsors":"budget","Follow-up":"lead"};
+const GKINDS = [["speaker","Speaker"],["panelist","Panelist"],["moderator","Moderator"],["sponsor","Sponsor"],["partner","Partner org"],["guest","Guest"]];
+const GSTAT = [["idea","Idea"],["invited","Invited"],["confirmed","Confirmed"],["declined","Declined"]];
+const TEMPLATES = {
+  workshop:{label:"Workshop / talk",icon:"🎤",desc:"One speaker, a room, an audience.",
+    tasks:[[-35,"Venue & logistics","Book the room"],[-35,"Content & speakers","Confirm speaker, topic and date"],[-28,"Marketing","Write the event description"],[-24,"Marketing","Design the poster"],[-21,"Registration","Open the registration form"],[-14,"Marketing","Post in the newsletter and WhatsApp groups"],[-10,"Content & speakers","Get the speaker's bio and photo"],[-7,"Venue & logistics","Order food and drinks"],[-3,"Registration","Send a reminder to registrants"],[-1,"Venue & logistics","Check projector, mic and signage"],[1,"Follow-up","Send a thank-you to the speaker"],[3,"Follow-up","Collect feedback and fill in the review"]],
+    run:[["17:30","Team arrives, set up room and food"],["18:00","Doors open, registration"],["18:15","Welcome and intro to Nucleate"],["18:20","Talk"],["19:00","Q&A"],["19:20","Networking"],["20:00","Clean up"]],
+    budget:[["Food and drinks",800],["Printing (posters, name tags)",150],["Speaker gift",150]]},
+  panel:{label:"Panel",icon:"🪑",desc:"Several panelists and a moderator.",
+    tasks:[[-42,"Content & speakers","Pick the panel topic"],[-40,"Content & speakers","Shortlist and invite panelists"],[-35,"Venue & logistics","Book the hall"],[-30,"Content & speakers","Confirm a moderator"],[-28,"Marketing","Design the poster with panelist photos"],[-21,"Registration","Open registration"],[-14,"Marketing","Post in the newsletter and social media"],[-10,"Content & speakers","Send panelists the questions"],[-7,"Venue & logistics","Arrange chairs, mics and water"],[-3,"Registration","Send a reminder"],[-1,"Content & speakers","Brief call with panelists and moderator"],[2,"Follow-up","Thank panelists, share photos"],[4,"Follow-up","Fill in the review"]],
+    run:[["17:30","Set up stage and chairs"],["18:00","Doors open"],["18:15","Opening words"],["18:20","Panel discussion"],["19:15","Audience Q&A"],["19:40","Networking"]],
+    budget:[["Food and drinks",1200],["Panelist gifts",400],["Printing",150]]},
+  social:{label:"Networking / social",icon:"🥂",desc:"Meet people, food, light program.",
+    tasks:[[-28,"Venue & logistics","Find and book a venue"],[-21,"Budget & sponsors","Ask a sponsor to cover food"],[-21,"Marketing","Create the invitation"],[-18,"Registration","Open sign-ups"],[-10,"Marketing","Remind in the WhatsApp groups"],[-5,"Venue & logistics","Order food and drinks"],[-2,"Venue & logistics","Prepare name tags and music"],[2,"Follow-up","Share photos and thank attendees"]],
+    run:[["19:00","Set up"],["19:30","Guests arrive"],["20:00","Short welcome"],["21:30","Wrap up"]],
+    budget:[["Food and drinks",1500],["Venue",500],["Decorations",200]]},
+  tour:{label:"Lab / company tour",icon:"🔬",desc:"Visit a lab, startup or company.",
+    tasks:[[-35,"Content & speakers","Agree on a date with the host"],[-28,"Registration","Decide the group size and open sign-ups"],[-21,"Marketing","Announce in the newsletter"],[-14,"Venue & logistics","Arrange transport or a meeting point"],[-7,"Registration","Send the final list to the host"],[-2,"Registration","Send participants directions and rules"],[1,"Follow-up","Thank the host"]],
+    run:[["09:30","Meet at the meeting point"],["10:00","Arrive, safety briefing"],["10:15","Tour"],["11:30","Q&A with the team"],["12:00","Head back"]],
+    budget:[["Transport",600],["Host gift",150]]},
+  competition:{label:"Competition / hackathon",icon:"🏆",desc:"Teams, judges, prizes.",
+    tasks:[[-60,"Content & speakers","Define the challenge and rules"],[-50,"Budget & sponsors","Secure sponsors and prizes"],[-45,"Venue & logistics","Book the venue"],[-40,"Content & speakers","Recruit judges and mentors"],[-35,"Marketing","Launch the call for teams"],[-14,"Registration","Close registration, confirm teams"],[-7,"Content & speakers","Send judges the scoring sheet"],[-3,"Venue & logistics","Order food, check Wi-Fi and power"],[2,"Follow-up","Announce winners, thank sponsors"],[5,"Follow-up","Fill in the review"]],
+    run:[["08:30","Set up"],["09:00","Check-in"],["09:30","Opening and challenge"],["10:00","Work time"],["16:00","Pitches"],["17:30","Judging"],["18:00","Winners and closing"]],
+    budget:[["Prizes",3000],["Food",2500],["Venue",1000],["Swag",800]]},
+  blank:{label:"Start from scratch",icon:"✏️",desc:"No preset tasks.",tasks:[],run:[],budget:[]}
+};
+const live = m => Object.entries(m||{}).filter(([,v])=>v);
+const nid = p => p+Date.now().toString(36)+Math.random().toString(36).slice(2,5);
+const money = n => "₪"+Math.round(Number(n)||0).toLocaleString("en-US");
+const planTeam = p => { const s=new Set([p.createdBy,p.lead].filter(Boolean)); live(p.roles).forEach(([,r])=>r.uid&&s.add(r.uid)); return [...s]; };
+function roleFor(p, section){ const k=SECTION_ROLE[section]||"lead"; const r=(p.roles||{})[k]; return (r&&r.uid)||p.lead||""; }
+
+function openPlan(id, date){ if(id){ location.hash="event-"+id; return; }
+  openD("plan",{id:null,draft:{title:"",template:"workshop",date:date||"",time:"18:00",location:""}}); }
+function drawPlan(key, live){ if(live) return; const d=S.drawer.draft;
+  return shell(key,"New event",`<div class="dh"><h2>Plan a new event</h2><button class="btn ghost" data-act="close" aria-label="Close">✕</button></div>
     <form class="box" id="planForm" novalidate>
-      <label class="f"><span class="lh">Event<span class="req">*</span></span><input id="pTitle" dir="auto" value="${esc(d.title)}" placeholder="Lab tour night · Founders panel" ${dis} data-autofocus></label>
-      <div class="seg" role="radiogroup" aria-label="Stage" style="margin:0">${PSTAGES.map(([k,l])=>`<button type="button" data-pstage="${k}" aria-pressed="${(d.stage||"idea")===k}" ${dis}>${l}</button>`).join("")}</div>
-      <div class="grid2"><label class="f">Date<input id="pDate" type="date" value="${esc(d.date)}" ${dis}></label><label class="f">Time<input id="pTime" type="time" value="${esc(d.time)}" ${dis}></label>
-        <label class="f">Where<input id="pLoc" dir="auto" value="${esc(d.location)}" placeholder="Building / room" ${dis}></label><label class="f">Lead<select id="pLead" ${dis}>${peopleOpts(d.lead,"No lead yet")}</select></label></div>
-      <label class="f">Registration / info link<input id="pLink" type="url" value="${esc(d.link)}" placeholder="https://…" ${dis}></label>
-      <label class="f">Notes<textarea id="pNotes" rows="3" dir="auto" placeholder="Idea, budget, who to invite" ${dis}>${esc(d.notes)}</textarea></label>
+      <label class="f"><span class="lh">Event name<span class="req">*</span></span><input id="pTitle" dir="auto" value="${esc(d.title)}" placeholder="Founders panel · Lab tour at BioHub" data-autofocus></label>
+      <div class="f" style="display:flex;flex-direction:column;gap:6px;font-size:12.5px;color:var(--muted);font-weight:500">Start from a template
+        <div class="tpl">${Object.entries(TEMPLATES).map(([k,t])=>`<input type="radio" name="pTpl" id="tp-${k}" value="${k}" ${d.template===k?"checked":""}><label for="tp-${k}"><span class="ic">${t.icon}</span><b>${esc(t.label)}</b><span>${esc(t.desc)}${t.tasks.length?` · ${t.tasks.length} tasks`:""}</span></label>`).join("")}</div></div>
+      <div class="grid2"><label class="f">Date<input id="pDate" type="date" value="${esc(d.date)}"></label><label class="f">Start time<input id="pTime" type="time" value="${esc(d.time)}"></label></div>
+      <label class="f">Where<input id="pLoc" dir="auto" value="${esc(d.location)}" placeholder="Building / room · or TBD"></label>
+      <div class="hint">With a date, template tasks get due dates counted back from the event (e.g. "Book the room" 5 weeks before). No date yet? Tasks are added without dates and get them once you set one.</div>
       <div id="pErr"></div>
-      <div class="toolbar" style="margin:0">${ro?"":`<button class="btn pri" type="submit">${p?"Save changes":"Add event idea"}</button>`}${p&&S.canWrite&&!p.itemId?`<button type="button" class="btn" data-act="plan-to-news">➜ Add to newsletter</button>`:""}${p&&p.itemId?`<a class="btn" href="#" data-open="${esc(p.itemId)}">Open newsletter item</a>`:""}${p&&p.date?`<a class="btn" target="_blank" rel="noopener" href="${esc(gcalUrl({title:p.title,date:p.date,time:p.time,location:p.location,details:p.link}))}">+ Google Calendar</a>`:""}<span style="flex:1"></span>${p&&!ro?`<button type="button" class="btn ghost danger" data-act="del">Delete</button>`:""}</div>
-      ${ro?"":delBlock("Move this event to the Trash?")}
-    </form>
-    ${p?`<div class="box"><h3>Checklist</h3><div id="ckBox">${checklistHtml(p,ro)}</div></div><div class="box"><h3>Tasks</h3><div id="ptasks">${planTasks(p)}</div>${taskAddForm(`data-plan="${esc(p.id)}"`)}</div>`:""}`);
+      <div class="toolbar" style="margin:0"><button class="btn pri" type="submit">Create event</button></div>
+    </form>`);
 }
-function planTasks(p){ const ts=A("tasks").filter(t=>t.planId===p.id); return ts.length?`<div class="tasks">${ts.map(t=>taskRow(t,true)).join("")}</div>`:`<div class="colempty">No tasks yet.</div>`; }
-function readPlan(){ const d=S.drawer.draft; Object.assign(d,{title:$("#pTitle").value.trim(),date:$("#pDate").value,time:$("#pTime").value,location:$("#pLoc").value.trim(),lead:$("#pLead").value,link:$("#pLink").value.trim(),notes:$("#pNotes").value.trim()}); return d; }
-async function submitPlan(){ const D=S.drawer, d=readPlan(); if(!d.title){ $("#pErr").innerHTML=`<div class="dup">Give the event a name first.</div>`; return; }
-  const data={title:d.title,stage:d.stage||"idea",date:d.date,time:d.time,location:d.location,lead:d.lead,link:d.link,notes:d.notes,...stamp()};
-  if(D.id){ const prev=S.plans.find(x=>x.id===D.id); if(await upd("plans",D.id,data)){ logAct(prev&&prev.stage!==data.stage?`moved event to ${PSTAGE[data.stage]}:`:"updated event",d.title); closeDrawer(); toast("Saved."); } }
-  else { const ck={}; DEFAULT_CHECK.forEach((t,i)=>{ ck["c"+i]={text:t,done:false,at:i}; });
-    const id=await add("plans",Object.assign(data,{checklist:ck,itemId:"",createdBy:S.meId,createdAt:Date.now()})); if(id){ logAct("added an event idea:",d.title); closeDrawer(); await whenExists("plans",id); openPlan(id); toast("Event added with a starter checklist."); } }
+async function submitPlan(){ const title=$("#pTitle").value.trim(); if(!title){ $("#pErr").innerHTML=`<div class="dup">Give the event a name first.</div>`; return; }
+  const tk=(document.querySelector('input[name="pTpl"]:checked')||{}).value||"blank"; const tpl=TEMPLATES[tk]; const date=$("#pDate").value, time=$("#pTime").value, loc=$("#pLoc").value.trim();
+  const roles={}; EV_ROLES.forEach(([k,l],i)=>{ roles[k]={name:l,uid:k==="lead"?S.meId:"",at:i}; });
+  const ck={}; DEFAULT_CHECK.forEach((t,i)=>{ ck["c"+i]={text:t,done:false,at:i}; });
+  const run={}; tpl.run.forEach(([t,w],i)=>{ run["r"+i]={time:t,what:w,who:"",at:i}; });
+  const budget={}; tpl.budget.forEach(([l,e],i)=>{ budget["b"+i]={label:l,est:e,actual:0,paid:false,by:"",at:i}; });
+  const data={title,template:tk,stage:"planning",date,time,endTime:"",location:loc,capacity:"",audience:"",link:"",description:"",lead:S.meId,team:[S.meId],roles,checklist:ck,run,budget,budgetTotal:tpl.budget.reduce((a,b)=>a+b[1],0),guests:{},review:{},itemId:"",createdBy:S.meId,createdAt:Date.now(),...stamp()};
+  const id=await add("plans",data); if(!id) return;
+  for(const [off,sec,t] of tpl.tasks){ await add("tasks",{title:t,assignee:roleFor(data,sec)===S.meId&&SECTION_ROLE[sec]!=="lead"?"":roleFor(data,sec),due:date?shiftS(date,off):"",relDays:off,section:sec,done:false,notes:"",meetingId:"",occurrence:"",planId:id,createdBy:S.meId,createdAt:Date.now(),...stamp()}); }
+  logAct("started planning",title); closeDrawer(); S.etab="overview"; location.hash="event-"+id; toast(tpl.tasks.length?`Event created with ${tpl.tasks.length} tasks. Assign roles next.`:"Event created.");
 }
+
+function planCard(p){ const ts=A("tasks").filter(t=>t.planId===p.id); const dn=ts.filter(t=>t.done).length; const d=p.date?daysTo(p.date):null;
+  return `<div class="card" data-plan="${esc(p.id)}" style="--tc:var(--m-plan)" role="button" tabindex="0"><div class="meta">${p.date?`<span class="chip ${d>=0&&d<=7?"soon":""}">🗓 ${esc(fmtDW(p.date))}${d>=0&&p.stage!=="done"?` · ${d===0?"today":"in "+d+"d"}`:""}</span>`:`<span class="chip">No date yet</span>`}${p.itemId?`<span class="chip ok">In newsletter</span>`:""}</div>
+    <div class="t" dir="auto">${(TEMPLATES[p.template]||{}).icon||"🎪"} ${esc(p.title)}</div>${p.location?`<div class="meta" dir="auto">📍 ${esc(p.location)}</div>`:""}
+    ${ts.length?`<div class="prog" title="${dn} of ${ts.length} tasks done"><span style="width:${Math.round(100*dn/ts.length)}%"></span></div><div class="meta">${dn}/${ts.length} tasks done</div>`:""}
+    <div class="foot"><div class="meta">${planTeam(p).slice(0,5).map(avImg).join("")}<span>${p.lead?esc(firstName(p.lead))+" leads":"No lead yet"}</span></div></div></div>`; }
+function vEvents(){ const ps=A("plans");
+  return `<h2>Event planner</h2><p class="sub">Events the branch organizes. Each event has its own page with tasks and a timeline, roles, budget, guests, run of show and a review afterwards.</p>
+    ${S.canWrite?`<div class="toolbar"><button class="btn pri" data-act="new-plan">+ Plan a new event</button></div>`:""}
+    ${ps.length?`<div class="board" style="grid-template-columns:repeat(4,minmax(230px,1fr))">${PSTAGES.map(([k,l])=>{ const cs=ps.filter(p=>(p.stage||"idea")===k).sort((a,b)=>(a.date||"9")<(b.date||"9")?-1:1);
+      return `<section class="col"><div class="col-h"><h3>${l}</h3><span class="c">${cs.length}</span></div>${cs.map(planCard).join("")||`<div class="colempty">${k==="idea"?"Ideas go here.":"Nothing here."}</div>`}</section>`; }).join("")}</div>`
+      :`<div class="empty"><b>No events yet</b>Pick a template (workshop, panel, social, tour, competition) and the planner sets up tasks, a run of show and a starter budget for you.<br><br>${S.canWrite?`<button class="btn pri" data-act="new-plan">+ Plan a new event</button>`:""}</div>`}`; }
+
+// ── event page ──
+function vEvent(){
+  const p=S.plans.find(x=>x.id===S.eventId);
+  if(!p||p.deleted) return `<div class="empty"><b>${S.plans.length?"This event isn't here anymore":"Loading…"}</b>${S.plans.length?`It may have been moved to the Trash.<br><br><a class="btn" href="#events">Back to events</a>`:""}</div>`;
+  const ed=canEditPlan(p); const tab=S.etab||"overview"; const ts=A("tasks").filter(t=>t.planId===p.id); const d=p.date?daysTo(p.date):null;
+  const done=ts.filter(t=>t.done).length; const over=ts.filter(t=>!t.done&&t.due&&daysTo(t.due)<0).length;
+  const tabs=[["overview","Overview"],["tasks",`Tasks${ts.length?` (${ts.length-done})`:""}`],["team","Team & roles"],["budget","Budget"],["guests",`Guests${live(p.guests).length?` (${live(p.guests).length})`:""}`],["run","Run of show"],["after","After the event"]];
+  const body={overview:evOverview,tasks:evTasks,team:evTeam,budget:evBudget,guests:evGuests,run:evRun,after:evAfter}[tab](p,ed,ts);
+  return `<div class="crumbs"><a href="#events">← Event planner</a></div>
+    <section class="evhead"><div class="evtitle"><span class="ic">${(TEMPLATES[p.template]||{}).icon||"🎪"}</span><div style="min-width:0"><h2 dir="auto">${esc(p.title)}</h2>
+      <div class="meta">${p.date?`<span class="chip ${d!==null&&d>=0&&d<=7?"soon":""}">🗓 ${esc(fmtDW(p.date))}${p.time?" · "+esc(p.time):""}${p.endTime?"–"+esc(p.endTime):""}</span>`:`<span class="chip hot">No date yet</span>`}${p.location?`<span class="chip">📍 ${esc(p.location)}</span>`:""}${d!==null&&p.stage!=="done"?`<span class="chip ${d<0?"":"ok"}">${d>0?`in ${plural(d,"day")}`:d===0?"Today!":`${plural(-d,"day")} ago`}</span>`:""}${ts.length?`<span class="chip ${over?"hot":""}">${done}/${ts.length} tasks${over?` · ${over} overdue`:""}</span>`:""}</div></div></div>
+      <div class="seg" style="margin:0" role="radiogroup" aria-label="Stage">${PSTAGES.map(([k,l])=>`<button type="button" data-evstage="${k}" aria-pressed="${(p.stage||"idea")===k}" ${ed?"":"disabled"}>${l}</button>`).join("")}</div>
+    </section>
+    ${ed?"":`<div class="banner" style="background:var(--sunk)">You're viewing this event. Its lead, its team members and admins can edit it; you can still tick tasks and checklist steps.</div>`}
+    <div class="seg evtabs" role="tablist">${tabs.map(([k,l])=>`<button role="tab" aria-selected="${tab===k}" data-etab="${k}">${l}</button>`).join("")}</div>
+    ${body}`;
+}
+function evOverview(p,ed,ts){ const dis=ed?"":"disabled"; const g=live(p.guests).map(([,v])=>v); const b=live(p.budget).map(([,v])=>v); const est=b.reduce((a,x)=>a+(+x.est||0),0); const ck=live(p.checklist); const ckd=ck.filter(([,c])=>c.done).length;
+  const next=ts.filter(t=>!t.done).sort((a,b)=>(a.due||"9")<(b.due||"9")?-1:1).slice(0,6);
+  return `<div class="tiles">
+      <a class="tile" href="#" data-etab="tasks"><span class="v">${ts.filter(t=>!t.done).length}</span><span class="l">open tasks${ts.filter(t=>!t.done&&!t.assignee).length?` · ${ts.filter(t=>!t.done&&!t.assignee).length} unassigned`:""}</span></a>
+      <a class="tile" href="#" data-etab="team"><span class="v">${planTeam(p).length}</span><span class="l">people on the team</span></a>
+      <a class="tile" href="#" data-etab="budget"><span class="v small">${money(est)}${p.budgetTotal?` / ${money(p.budgetTotal)}`:""}</span><span class="l">planned spend${p.budgetTotal&&est>p.budgetTotal?" · over budget":""}</span></a>
+      <a class="tile" href="#" data-etab="guests"><span class="v">${g.filter(x=>x.status==="confirmed").length}/${g.length}</span><span class="l">guests confirmed</span></a></div>
+    <div class="home-grid">
+      <form class="panel" id="evDetails" novalidate><div class="panel-h"><h3>Details</h3></div><div style="display:flex;flex-direction:column;gap:12px">
+        <label class="f">Event name<input id="eTitle" dir="auto" value="${esc(p.title)}" ${dis}></label>
+        <div class="grid2"><label class="f">Date<input id="eDate" type="date" value="${esc(p.date)}" ${dis}></label><label class="f">Start<input id="eTime" type="time" value="${esc(p.time)}" ${dis}></label><label class="f">End<input id="eEnd" type="time" value="${esc(p.endTime||"")}" ${dis}></label>
+          <label class="f">Where<input id="eLoc" dir="auto" value="${esc(p.location)}" ${dis}></label><label class="f">Expected attendance<input id="eCap" type="number" min="0" value="${esc(p.capacity||"")}" ${dis}></label><label class="f">Audience<input id="eAud" dir="auto" value="${esc(p.audience||"")}" placeholder="BSc, MSc/PhD, everyone" ${dis}></label></div>
+        <label class="f">Registration / info link<input id="eLink" type="url" value="${esc(p.link||"")}" placeholder="https://…" ${dis}></label>
+        <label class="f">Description<textarea id="eDesc" rows="4" dir="auto" placeholder="What it is, who it's for, why come. This becomes the newsletter blurb." ${dis}>${esc(p.description||"")}</textarea></label>
+        ${ed?`<div class="toolbar" style="margin:0"><button class="btn pri" type="submit">Save details</button>${p.date?`<a class="btn" target="_blank" rel="noopener" href="${esc(gcalUrl({title:p.title,date:p.date,time:p.time,endTime:p.endTime,location:p.location,details:p.link}))}">+ Google Calendar</a>`:""}${!p.itemId?`<button type="button" class="btn" data-act="plan-to-news">➜ Add to newsletter</button>`:`<a class="btn" href="#" data-open="${esc(p.itemId)}">Newsletter item</a>`}<span style="flex:1"></span><button type="button" class="btn ghost danger" data-act="ev-del">Delete event</button></div>
+        ${S.evConfirmDel?`<div class="confirm">Move this event and its plan to the Trash? Its tasks stay in Tasks. <button type="button" class="btn sm danger" data-act="ev-del-yes">Move to Trash</button><button type="button" class="btn sm" data-act="ev-del-no">Keep</button></div>`:""}`:""}
+      </div></form>
+      <div style="display:flex;flex-direction:column;gap:16px;min-width:0">
+        <div class="panel"><div class="panel-h"><h3>Next up</h3><a href="#" class="hint" data-etab="tasks">All tasks →</a></div>${next.length?`<div class="tasks">${next.map(t=>taskRow(t,true)).join("")}</div>`:`<div class="colempty">${ts.length?"Everything's done.":"No tasks yet."}</div>`}</div>
+        <div class="panel"><div class="panel-h"><h3>Checklist</h3><span class="hint">${ckd}/${ck.length}</span></div><div id="ckBox">${checklistHtml(p,!ed)}</div></div>
+      </div></div>`; }
+function checklistHtml(p, ro){ const ck=live(p.checklist).sort((a,b)=>(a[1].at||0)-(b[1].at||0));
+  return (ck.length?`<div class="tasks">${ck.map(([k,c])=>`<div class="task ${c.done?"done":""}"><input type="checkbox" data-ck="${esc(k)}" ${c.done?"checked":""} ${S.canWrite?"":"disabled"} aria-label="Done"><div class="grow"><span class="t" dir="auto">${esc(c.text)}</span>${c.done&&c.by?`<div class="meta"><span>${esc(firstName(c.by))}</span></div>`:""}</div>${ro?"":`<button type="button" class="btn sm ghost" data-ckdel="${esc(k)}" aria-label="Remove">✕</button>`}</div>`).join("")}</div>`:`<div class="colempty">No checklist yet.</div>`)
+    +(ro?"":`<form id="ckForm" style="display:flex;gap:8px;margin-top:8px"><input id="ckText" placeholder="Add a checklist step…" dir="auto" style="flex:1"><button class="btn" type="submit">Add</button></form>`); }
+function evTasks(p,ed,ts){
+  const phase=t=>{ if(!t.due) return 0; if(!p.date) return 1; const r=Math.round((parseD(t.due)-parseD(p.date))/864e5); return r<=-28?1:r<=-14?2:r<=-7?3:r<0?4:r===0?5:6; };
+  const PH=[[0,"No date yet"],[1,"4+ weeks before"],[2,"2–4 weeks before"],[3,"The week before"],[4,"Final days"],[5,"Event day"],[6,"After the event"]];
+  const by=S.etf||"phase"; const sorted=ts.slice().sort((a,b)=>(a.due||"9999")<(b.due||"9999")?-1:(a.due||"9999")>(b.due||"9999")?1:0);
+  let groups; if(by==="phase") groups=PH.map(([k,l])=>[l,sorted.filter(t=>phase(t)===k)]); else if(by==="section") groups=EV_SECTIONS.map(s=>[s,sorted.filter(t=>(t.section||"General")===s)]); else groups=[...new Set(sorted.map(t=>t.assignee||""))].map(u=>[u?nameOf(u):"Unassigned",sorted.filter(t=>(t.assignee||"")===u)]);
+  const needShift=p.date&&ts.some(t=>typeof t.relDays==="number"&&!t.done&&t.due!==shiftS(p.date,t.relDays));
+  const secOpts=EV_SECTIONS.map(s=>`<option ${s==="General"?"selected":""}>${s}</option>`).join("");
+  return `${needShift&&ed?`<div class="dup" style="margin-bottom:12px">The event date changed (or was just set). <button class="btn sm" data-act="ev-shift">Update task due dates to match</button></div>`:""}
+    ${S.canWrite?`<form class="panel taskAdd evtask" data-forplan="${esc(p.id)}" style="margin-bottom:14px"><input name="title" id="evTaskTitle" placeholder="Add a task for this event…" dir="auto" aria-label="Task"><select name="section" aria-label="Area" data-evsec>${secOpts}</select><select name="assignee" aria-label="Assign to">${peopleOpts(roleFor(p,"General"),"Unassigned")}</select><input name="due" type="date" aria-label="Due date"><button class="btn pri" type="submit">Add</button></form>`:""}
+    <div class="seg" role="tablist" style="margin-bottom:12px">${[["phase","By timeline"],["section","By area"],["person","By person"]].map(([k,l])=>`<button role="tab" aria-selected="${by===k}" data-etf="${k}">${l}</button>`).join("")}</div>
+    ${ts.length? groups.filter(([,g])=>g.length).map(([l,g])=>`<div class="panel" style="margin-bottom:12px"><div class="panel-h"><h3>${esc(l)}</h3><span class="hint">${g.filter(t=>t.done).length}/${g.length} done</span></div><div class="tasks">${g.map(t=>evTaskRow(t,p)).join("")}</div></div>`).join("")
+      : `<div class="empty"><b>No tasks yet</b>Add tasks above, or apply a template.${ed?`<div class="toolbar" style="justify-content:center;margin:12px 0 0">${Object.entries(TEMPLATES).filter(([k])=>k!=="blank").map(([k,t])=>`<button class="btn sm" data-tplapply="${k}">${t.icon} ${esc(t.label)}</button>`).join("")}</div>`:""}</div>`}`; }
+function evTaskRow(t,p){ const rel=p.date&&t.due?Math.round((parseD(t.due)-parseD(p.date))/864e5):null;
+  return `<div class="task ${t.done?"done":""}"><input type="checkbox" data-done="${esc(t.id)}" ${t.done?"checked":""} ${S.canWrite?"":"disabled"} aria-label="Done"><div class="grow"><a href="#" class="t" data-task="${esc(t.id)}" dir="auto">${esc(t.title)}</a>
+    <div class="meta">${t.assignee?`${avImg(t.assignee)}<span>${esc(firstName(t.assignee))}</span>`:`<span class="chip soon">Unassigned</span>`}${dueChip(t.due,t.done)}${rel!==null?`<span>${rel<0?`${-rel}d before`:rel===0?"event day":`${rel}d after`}</span>`:""}<span class="chip">${esc(t.section||"General")}</span></div></div></div>`; }
+function evTeam(p,ed){ const roles=live(p.roles).sort((a,b)=>(a[1].at??99)-(b[1].at??99)); const ts=A("tasks").filter(t=>t.planId===p.id);
+  return `<div class="panel" style="margin-bottom:16px"><div class="panel-h"><h3>Roles</h3><span class="hint">New tasks in an area go to that area's person automatically</span></div>
+    <div class="list">${roles.map(([k,r])=>`<div class="row"><div class="grow"><div class="t">${esc(r.name)}</div><div class="s">${r.uid?`${ts.filter(t=>t.assignee===r.uid&&!t.done).length} open tasks on this event`:"Nobody yet"}</div></div>
+      ${ed?`<select data-role="${esc(k)}" aria-label="Person for ${esc(r.name)}">${peopleOpts(r.uid,"Nobody yet")}</select>${k!=="lead"?`<button class="btn sm ghost danger" data-roledel="${esc(k)}" aria-label="Remove role">✕</button>`:""}`:(r.uid?`<span class="meta" style="display:flex;gap:6px;align-items:center">${avImg(r.uid)}${esc(nameOf(r.uid))}</span>`:"")}</div>`).join("")}</div>
+    ${ed?`<form id="roleForm" class="toolbar" style="margin:12px 0 0"><input id="roleName" placeholder="Add a role: Photographer, MC, Treasurer…" dir="auto" style="flex:1 1 220px"><select id="roleWho" aria-label="Person">${peopleOpts("","Nobody yet")}</select><button class="btn" type="submit">Add role</button></form>`:""}</div>
+    <div class="panel"><div class="panel-h"><h3>Workload</h3></div><div class="list">${planTeam(p).map(u=>{ const mine=ts.filter(t=>t.assignee===u); const open=mine.filter(t=>!t.done); const od=open.filter(t=>t.due&&daysTo(t.due)<0).length;
+      return `<div class="row"><span class="meta" style="display:flex;gap:8px;align-items:center">${avImg(u)}<b>${esc(nameOf(u))}</b></span><span class="grow"></span><span class="chip">${open.length} open</span>${od?`<span class="chip hot">${od} overdue</span>`:""}<span class="chip ok">${mine.length-open.length} done</span></div>`; }).join("")||`<div class="colempty">Assign roles to build the team.</div>`}</div></div>`; }
+function evBudget(p,ed){ const b=live(p.budget).sort((a,c)=>(a[1].at||0)-(c[1].at||0)); const est=b.reduce((a,[,x])=>a+(+x.est||0),0), act=b.reduce((a,[,x])=>a+(+x.actual||0),0), total=+p.budgetTotal||0; const dis=ed?"":"disabled";
+  return `<div class="tiles" style="grid-template-columns:repeat(3,minmax(0,1fr))"><div class="tile"><span class="v small">${money(total)}</span><span class="l">budget</span></div><div class="tile"><span class="v small" style="color:${total&&est>total?"var(--coral)":"inherit"}">${money(est)}</span><span class="l">planned${total?` · ${money(total-est)} left`:""}</span></div><div class="tile"><span class="v small">${money(act)}</span><span class="l">spent so far</span></div></div>
+    ${total?`<div class="prog" style="height:10px;margin-bottom:16px" title="${Math.round(100*est/total)}% planned"><span style="width:${Math.min(100,Math.round(100*est/total))}%;background:${est>total?"var(--coral)":"var(--m-plan)"}"></span></div>`:""}
+    <div class="panel"><div class="panel-h"><h3>Budget lines</h3>${ed?`<form id="btForm" style="display:flex;gap:6px;align-items:center"><label class="hint" for="bTotal">Total budget ₪</label><input id="bTotal" type="number" min="0" value="${esc(total||"")}" style="width:110px"><button class="btn sm">Set</button></form>`:""}</div>
+      <div class="btable" role="table"><div class="bh" role="row"><span>Item</span><span>Planned ₪</span><span>Actual ₪</span><span>Paid by</span><span>Paid</span><span></span></div>
+      ${b.map(([k,x])=>`<div class="br" role="row"><span dir="auto">${esc(x.label)}</span><input type="number" min="0" value="${esc(x.est||"")}" data-bud="${esc(k)}" data-f="est" aria-label="Planned for ${esc(x.label)}" ${dis}><input type="number" min="0" value="${esc(x.actual||"")}" data-bud="${esc(k)}" data-f="actual" aria-label="Actual for ${esc(x.label)}" ${dis}><select data-bud="${esc(k)}" data-f="by" aria-label="Paid by" ${dis}>${peopleOpts(x.by,"—")}<option value="sponsor" ${x.by==="sponsor"?"selected":""}>Sponsor</option><option value="uni" ${x.by==="uni"?"selected":""}>University</option></select><input type="checkbox" data-bud="${esc(k)}" data-f="paid" ${x.paid?"checked":""} aria-label="Paid" ${dis}>${ed?`<button class="btn sm ghost danger" data-buddel="${esc(k)}" aria-label="Remove">✕</button>`:"<span></span>"}</div>`).join("")||`<div class="colempty">No budget lines yet.</div>`}
+      </div>${ed?`<form id="budForm" class="toolbar" style="margin:12px 0 0"><input id="budLabel" placeholder="Add an item: Pizza, Printing, Speaker gift…" dir="auto" style="flex:1 1 220px"><input id="budEst" type="number" min="0" placeholder="₪ planned" style="width:120px"><button class="btn" type="submit">Add</button></form>`:""}</div>`; }
+function evGuests(p,ed){ const g=live(p.guests).sort((a,b)=>(a[1].at||0)-(b[1].at||0)); const dis=ed?"":"disabled";
+  return `<div class="panel"><div class="panel-h"><h3>Speakers, sponsors and guests</h3><span class="hint">${g.filter(([,x])=>x.status==="confirmed").length} confirmed</span></div>
+    <div class="list">${g.map(([k,x])=>{ const c=x.contactId&&S.contacts.find(y=>y.id===x.contactId); return `<div class="row"><div class="grow"><div class="t" dir="auto">${esc(x.name)}${c?` <a href="#" data-contact="${esc(c.id)}" class="hint">contact card</a>`:""}</div><div class="s" dir="auto">${esc((GKINDS.find(q=>q[0]===x.kind)||["","Guest"])[1])}${x.owner?" · "+esc(firstName(x.owner))+" is in touch":""}${x.note?" · "+esc(x.note):""}</div></div>
+      <select data-guest="${esc(k)}" data-f="status" aria-label="Status" ${dis}>${GSTAT.map(([v,l])=>`<option value="${v}" ${x.status===v?"selected":""}>${l}</option>`).join("")}</select><select data-guest="${esc(k)}" data-f="owner" aria-label="Who's in touch" ${dis}>${peopleOpts(x.owner,"Nobody")}</select>${ed?`<button class="btn sm ghost danger" data-guestdel="${esc(k)}" aria-label="Remove">✕</button>`:""}</div>`; }).join("")||`<div class="colempty">Nobody added yet.</div>`}</div>
+    ${ed?`<form id="guestForm" class="toolbar" style="margin:12px 0 0"><select id="gContact" aria-label="From contacts"><option value="">New person…</option>${A("contacts").sort((a,b)=>(a.name||"").localeCompare(b.name||"")).map(c=>`<option value="${esc(c.id)}">${esc(c.name)}${c.org?" · "+esc(c.org):""}</option>`).join("")}</select><input id="gName" placeholder="Name" dir="auto" style="flex:1 1 160px"><select id="gKind" aria-label="Kind">${GKINDS.map(([v,l])=>`<option value="${v}">${l}</option>`).join("")}</select><input id="gNote" placeholder="Note (optional)" dir="auto" style="flex:1 1 160px"><button class="btn" type="submit">Add</button></form>`:""}</div>`; }
+function evRun(p,ed){ const r=live(p.run).sort((a,b)=>(a[1].time||"")<(b[1].time||"")?-1:(a[1].time||"")>(b[1].time||"")?1:(a[1].at||0)-(b[1].at||0)); const dis=ed?"":"disabled";
+  return `<div class="panel"><div class="panel-h"><h3>Run of show${p.date?" · "+esc(fmtDW(p.date)):""}</h3><span class="hint">The minute-by-minute plan for the day</span></div>
+    <div class="list">${r.map(([k,x])=>`<div class="row"><input type="time" value="${esc(x.time||"")}" data-run="${esc(k)}" data-f="time" aria-label="Time" style="width:120px" ${dis}><div class="grow"><input value="${esc(x.what||"")}" data-run="${esc(k)}" data-f="what" dir="auto" aria-label="What happens" style="width:100%" ${dis}></div><select data-run="${esc(k)}" data-f="who" aria-label="Who" ${dis}>${peopleOpts(x.who,"Who?")}</select>${ed?`<button class="btn sm ghost danger" data-rundel="${esc(k)}" aria-label="Remove">✕</button>`:""}</div>`).join("")||`<div class="colempty">Nothing planned yet.</div>`}</div>
+    ${ed?`<form id="runForm" class="toolbar" style="margin:12px 0 0"><input id="runTime" type="time" aria-label="Time"><input id="runWhat" placeholder="What happens: Doors open, Opening words…" dir="auto" style="flex:1 1 220px"><select id="runWho" aria-label="Who">${peopleOpts("","Who?")}</select><button class="btn" type="submit">Add</button></form>`:""}</div>`; }
+function evAfter(p,ed){ const rv=p.review||{}; const dis=ed?"":"disabled";
+  return `<form class="panel" id="reviewForm" novalidate><div class="panel-h"><h3>After the event</h3><span class="hint">Write it down while it's fresh, so the next event goes better</span></div><div style="display:flex;flex-direction:column;gap:12px">
+    <div class="grid2"><label class="f">Registered<input id="rReg" type="number" min="0" value="${esc(rv.registered||"")}" ${dis}></label><label class="f">Actually came<input id="rAtt" type="number" min="0" value="${esc(rv.attendance||"")}" ${dis}></label><label class="f">Rating (1–5)<input id="rRate" type="number" min="1" max="5" value="${esc(rv.rating||"")}" ${dis}></label></div>
+    <label class="f">What went well<textarea id="rWell" rows="3" dir="auto" ${dis}>${esc(rv.wentWell||"")}</textarea></label>
+    <label class="f">What to do differently next time<textarea id="rImprove" rows="3" dir="auto" ${dis}>${esc(rv.improve||"")}</textarea></label>
+    <label class="f">Photos / slides link<input id="rPhotos" type="url" value="${esc(rv.photos||"")}" placeholder="https://…" ${dis}></label>
+    ${ed?`<div class="toolbar" style="margin:0"><button class="btn pri" type="submit">Save review</button>${p.stage!=="done"?`<button type="button" class="btn" data-evstage="done">Mark the event as done</button>`:""}${S.canWrite?`<button type="button" class="btn" data-act="ev-dup">Plan it again (copy)</button>`:""}</div>`:""}</div></form>`; }
+
+async function evUpdate(p, data, verb){ if(await upd("plans",p.id,{...data,...stamp()})){ if(verb) logAct(verb,p.title); return true; } return false; }
+function syncTeam(p, roles){ const s=new Set([p.createdBy].filter(Boolean)); Object.values(roles).forEach(r=>r&&r.uid&&s.add(r.uid)); return [...s]; }
+async function applyTemplate(p, tk){ const tpl=TEMPLATES[tk]; for(const [off,sec,t] of tpl.tasks){ await add("tasks",{title:t,assignee:roleFor(p,sec),due:p.date?shiftS(p.date,off):"",relDays:off,section:sec,done:false,notes:"",meetingId:"",occurrence:"",planId:p.id,createdBy:S.meId,createdAt:Date.now(),...stamp()}); }
+  const patch={template:tk}; if(!live(p.run).length&&tpl.run.length){ patch.run={}; tpl.run.forEach(([t,w],i)=>patch.run["r"+i]={time:t,what:w,who:"",at:i}); } if(!live(p.budget).length&&tpl.budget.length){ patch.budget={}; tpl.budget.forEach(([l,e],i)=>patch.budget["b"+i]={label:l,est:e,actual:0,paid:false,by:"",at:i}); if(!p.budgetTotal) patch.budgetTotal=tpl.budget.reduce((a,b)=>a+b[1],0); }
+  await evUpdate(p,patch,`applied the ${tpl.label.toLowerCase()} template to`); toast(`Added ${tpl.tasks.length} tasks.`); }
+async function duplicatePlan(p){ const ts=A("tasks").filter(t=>t.planId===p.id);
+  const copy={title:p.title+" (copy)",template:p.template||"blank",stage:"idea",date:"",time:p.time||"",endTime:p.endTime||"",location:p.location||"",capacity:p.capacity||"",audience:p.audience||"",link:"",description:p.description||"",lead:S.meId,team:[S.meId],roles:Object.fromEntries(live(p.roles).map(([k,r])=>[k,{...r,uid:k==="lead"?S.meId:""}])),
+    checklist:Object.fromEntries(live(p.checklist).map(([k,c])=>[k,{text:c.text,done:false,at:c.at||0}])),run:Object.fromEntries(live(p.run).map(([k,r])=>[k,{...r}])),budget:Object.fromEntries(live(p.budget).map(([k,b])=>[k,{label:b.label,est:b.est,actual:0,paid:false,by:"",at:b.at||0}])),budgetTotal:p.budgetTotal||0,guests:{},review:{},itemId:"",copiedFrom:p.id,createdBy:S.meId,createdAt:Date.now(),...stamp()};
+  const id=await add("plans",copy); if(!id) return; for(const t of ts){ await add("tasks",{title:t.title,assignee:"",due:"",relDays:typeof t.relDays==="number"?t.relDays:null,section:t.section||"General",done:false,notes:t.notes||"",meetingId:"",occurrence:"",planId:id,createdBy:S.meId,createdAt:Date.now(),...stamp()}); }
+  logAct("copied an event:",p.title); await whenExists("plans",id); S.etab="overview"; location.hash="event-"+id; toast("Copied with its tasks, run of show and budget. Set a date and assign people."); }
 
 // contact
 function openContact(id){ const c=id? S.contacts.find(x=>x.id===id) : null; if(id&&!c) return;
@@ -671,7 +846,7 @@ async function importBackup(file){ let data; try{ data=JSON.parse(await file.tex
 
 // ───────── events ─────────
 document.addEventListener("click", async e=>{
-  const t=e.target.closest("[data-act],[data-open],[data-meet],[data-plan],[data-task],[data-contact],[data-vote],[data-next],[data-pnext],[data-check],[data-delsrc],[data-move],[data-copyissue],[data-cal],[data-day],[data-done],[data-tf],[data-rsvp],[data-pstage],[data-ck],[data-ckdel],[data-mention],[data-restore],[data-purge],[data-sugg-ok],[data-sugg-no]");
+  const t=e.target.closest("[data-act],[data-open],[data-meet],[data-plan],[data-task],[data-contact],[data-vote],[data-next],[data-pnext],[data-check],[data-delsrc],[data-move],[data-copyissue],[data-cal],[data-day],[data-done],[data-tf],[data-rsvp],[data-pstage],[data-ck],[data-ckdel],[data-mention],[data-restore],[data-purge],[data-sugg-ok],[data-sugg-no],[data-unskip],[data-etab],[data-etf],[data-evstage],[data-tplapply],[data-roledel],[data-buddel],[data-guestdel],[data-rundel]");
   if(!t){ if(e.target.classList.contains("scrim")) closeDrawer(); return; }
   const ds=t.dataset;
   if(ds.done!==undefined&&t.tagName==="INPUT"){ toggleTask(ds.done); return; }
@@ -680,15 +855,25 @@ document.addEventListener("click", async e=>{
   if(ds.pnext){ const p=S.plans.find(x=>x.id===ds.pnext); const ix=PSTAGES.findIndex(x=>x[0]===(p.stage||"idea")); const ns=PSTAGES[ix+1]; if(ns&&await upd("plans",p.id,{stage:ns[0],...stamp()})){ logAct(`moved event to ${ns[1]}:`,p.title); } return; }
   if(ds.vote){ vote(ds.id,Number(ds.vote)); return; }
   if(ds.open){ e.preventDefault(); openItem(ds.open); return; }
-  if(ds.meet){ e.preventDefault(); openMeeting(ds.meet); return; }
+  if(ds.meet){ e.preventDefault(); openMeeting(ds.meet, null, ds.occ); return; }
+  if(ds.unskip){ e.preventDefault(); const mt=S.meetings.find(x=>x.id===S.drawer.id); if(await upd("meetings",mt.id,{exceptions:{[ds.unskip]:{skipped:false}},...stamp()})){ S.drawer.base=null; toast(`${fmtDW(ds.unskip)} is back on the calendar.`); } return; }
   if(ds.plan){ e.preventDefault(); openPlan(ds.plan); return; }
   if(ds.task){ e.preventDefault(); openTask(ds.task); return; }
   if(ds.contact){ openContact(ds.contact); return; }
   if(ds.tf){ S.tf=ds.tf; render(); return; }
-  if(ds.rsvp){ const id=S.drawer&&S.drawer.id; const mt=S.meetings.find(x=>x.id===id); if(!mt) return; const cur=(mt.rsvp||{})[S.meId]; await upd("meetings",id,{rsvp:{[S.meId]:cur===ds.rsvp?null:ds.rsvp},...stamp()}); S.drawer.base=null; return; }
-  if(ds.pstage){ S.drawer.draft.stage=ds.pstage; readPlan(); bump(); return; }
-  if(ds.ck&&t.tagName==="INPUT"){ const p=S.plans.find(x=>x.id===S.drawer.id); const c=(p.checklist||{})[ds.ck]; if(c){ await upd("plans",p.id,{checklist:{[ds.ck]:{done:!c.done,by:S.meId}},...stamp()}); S.drawer.base=null; if(!c.done) logAct(`ticked “${c.text}” for`,p.title); } return; }
-  if(ds.ckdel){ const p=S.plans.find(x=>x.id===S.drawer.id); const ck=Object.assign({},p.checklist); delete ck[ds.ckdel]; try{ await S.db.collection("plans").doc(p.id).set(Object.assign({},p,{checklist:ck},stamp(),{id:undefined})); S.drawer.base=null; }catch(er){ writeErr(er); } return; }
+  if(ds.rsvp){ const id=S.drawer&&S.drawer.id; const mt=S.meetings.find(x=>x.id===id); if(!mt) return; const occ=isSeries(mt)?S.drawer.occ:""; const cur=rsvpMap(mt,occ)[S.meId]; const v=cur===ds.rsvp?null:ds.rsvp;
+    await upd("meetings",id,occ?{orsvp:{[occ]:{[S.meId]:v}},...stamp()}:{rsvp:{[S.meId]:v},...stamp()}); S.drawer.base=null; return; }
+  if(ds.etab){ e.preventDefault(); S.etab=ds.etab; render(); window.scrollTo(0,0); return; }
+  if(ds.etf){ S.etf=ds.etf; render(); return; }
+  const EP=()=>S.plans.find(x=>x.id===S.eventId);
+  if(ds.evstage){ const p=EP(); if(p&&p.stage!==ds.evstage) evUpdate(p,{stage:ds.evstage},`moved event to ${PSTAGE[ds.evstage]}:`); return; }
+  if(ds.tplapply){ const p=EP(); if(p) applyTemplate(p,ds.tplapply); return; }
+  if(ds.roledel){ const p=EP(); const roles=Object.assign({},p.roles,{[ds.roledel]:null}); evUpdate(p,{roles:{[ds.roledel]:null},team:syncTeam(p,roles)}); return; }
+  if(ds.buddel){ evUpdate(EP(),{budget:{[ds.buddel]:null}}); return; }
+  if(ds.guestdel){ evUpdate(EP(),{guests:{[ds.guestdel]:null}}); return; }
+  if(ds.rundel){ evUpdate(EP(),{run:{[ds.rundel]:null}}); return; }
+  if(ds.ck&&t.tagName==="INPUT"){ const p=S.plans.find(x=>x.id===S.eventId); const c=(p.checklist||{})[ds.ck]; if(c){ await upd("plans",p.id,{checklist:{[ds.ck]:{done:!c.done,by:S.meId}},...stamp()}); S.drawer.base=null; if(!c.done) logAct(`ticked “${c.text}” for`,p.title); } return; }
+  if(ds.ckdel){ evUpdate(S.plans.find(x=>x.id===S.eventId),{checklist:{[ds.ckdel]:null}}); return; }
   if(ds.mention){ const inp=$("#"+ds.target); if(inp){ const n="@"+firstName(ds.mention)+" "; inp.value=(inp.value&&!/\s$/.test(inp.value)?inp.value+" ":inp.value)+n; inp.focus(); } return; }
   if(ds.restore){ const [c,id]=ds.restore.split(":"); restore(c,id); return; }
   if(ds.purge){ const [c,id]=ds.purge.split(":"); try{ await S.db.collection(c).doc(id).delete(); toast("Deleted for good."); }catch(er){ writeErr(er); } return; }
@@ -714,8 +899,15 @@ document.addEventListener("click", async e=>{
   else if(a==="del"){ S.drawer.confirmDel=true; bump(); }
   else if(a==="del-no"){ S.drawer.confirmDel=false; bump(); }
   else if(a==="del-yes"){ trash({item:"items",meeting:"meetings",task:"tasks",plan:"plans",contact:"contacts"}[D.kind], D.id); }
-  else if(a==="plan-to-news"){ const p=S.plans.find(x=>x.id===D.id); openItem(null,{type:"event",title:p.title,date:p.date,location:p.location,url:p.link||"",summary:""}); S.drawer.fromPlan=p.id; }
+  else if(a==="plan-to-news"){ const p=S.plans.find(x=>x.id===S.eventId); openItem(null,{type:"event",title:p.title,date:p.date,location:p.location,url:p.link||"",summary:p.description||""}); S.drawer.fromPlan=p.id; }
+  else if(a==="ev-del"){ S.evConfirmDel=true; render(); }
+  else if(a==="ev-del-no"){ S.evConfirmDel=false; render(); }
+  else if(a==="ev-del-yes"){ S.evConfirmDel=false; const id=S.eventId; await trash("plans",id); location.hash="events"; }
+  else if(a==="ev-shift"){ const p=S.plans.find(x=>x.id===S.eventId); let n=0; for(const t of A("tasks").filter(t=>t.planId===p.id&&typeof t.relDays==="number"&&!t.done)){ const nd=shiftS(p.date,t.relDays); if(t.due!==nd&&await upd("tasks",t.id,{due:nd,...stamp()})) n++; } toast(`Updated ${plural(n,"due date")}.`); }
+  else if(a==="ev-dup"){ duplicatePlan(S.plans.find(x=>x.id===S.eventId)); }
   else if(a==="contact-today") submitContact(true);
+  else if(a==="occ-skip"){ const mt=S.meetings.find(x=>x.id===D.id), k=D.occ; if(await upd("meetings",mt.id,{exceptions:{[k]:{skipped:true}},...stamp()})){ logAct(`skipped ${fmtD(k)}:`,mt.title); closeDrawer(); toast(`${fmtDW(k)} skipped.`,{label:"Undo",fn:()=>upd("meetings",mt.id,{exceptions:{[k]:{skipped:false}},...stamp()})}); } }
+  else if(a==="occ-reset"){ const mt=S.meetings.find(x=>x.id===D.id), k=D.occ; const notes=occOf(mt,k).notes; if(await upd("meetings",mt.id,{exceptions:{[k]:notes?{notes,skipped:false,date:null,time:null,endTime:null}:null},...stamp()})){ closeDrawer(); toast(`Back to the usual date and time.`); } }
   else if(a==="rm"){ S.confirmRemove=ds.email; render(); }
   else if(a==="rm-no"){ S.confirmRemove=null; render(); }
   else if(a==="rm-yes"){ const em=ds.email; S.confirmRemove=null; if(await saveAccess(accessList("admins").filter(e=>e!==em),accessList("members").filter(e=>e!==em))){ logAct("removed from the team:",em); toast(`${em} no longer has access.`); } }
@@ -732,14 +924,25 @@ document.addEventListener("click", async e=>{
   else if(a==="go-trash"){ closeDrawer(); location.hash="trash"; }
 });
 document.addEventListener("keydown", e=>{ if(e.key==="Escape"&&$("#layer").querySelector(".scrim")) closeDrawer();
-  if((e.key==="Enter"||e.key===" ")&&e.target.matches&&e.target.matches(".ag[role=button],.row[role=button]")){ e.preventDefault(); e.target.click(); } });
+  if((e.key==="Enter"||e.key===" ")&&e.target.matches&&e.target.matches(".ag[role=button],.row[role=button],.card[role=button]")){ e.preventDefault(); e.target.click(); } });
 document.addEventListener("submit", async e=>{
   e.preventDefault(); const f=e.target, id=f.id;
   if(f.classList.contains("taskAdd")) return addTask(f);
-  if(id==="itemForm") submitItem(); else if(id==="meetForm") submitMeeting(); else if(id==="taskForm") submitTask(); else if(id==="planForm") submitPlan(); else if(id==="contactForm") submitContact(false);
+  if(id==="itemForm") submitItem(); else if(id==="meetForm") submitMeeting(); else if(id==="occForm") submitOcc(); else if(id==="taskForm") submitTask(); else if(id==="planForm") submitPlan(); else if(id==="contactForm") submitContact(false);
+  else if(id==="evDetails"){ const p=S.plans.find(x=>x.id===S.eventId); const v=x=>$("#"+x).value.trim(); const data={title:v("eTitle")||p.title,date:$("#eDate").value,time:$("#eTime").value,endTime:$("#eEnd").value,location:v("eLoc"),capacity:v("eCap"),audience:v("eAud"),link:v("eLink"),description:v("eDesc")};
+    if(await evUpdate(p,data,p.date!==data.date?"moved the date of":"updated")){ f.querySelectorAll("input,textarea").forEach(el=>el.defaultValue=el.value); toast(p.date!==data.date&&A("tasks").some(t=>t.planId===p.id&&typeof t.relDays==="number")?"Saved. Check the Tasks tab to update due dates.":"Saved."); } }
+  else if(id==="roleForm"){ const p=S.plans.find(x=>x.id===S.eventId); const name=$("#roleName").value.trim(); if(!name) return; const k=nid("role"); const r={name,uid:$("#roleWho").value,at:Date.now()}; const roles=Object.assign({},p.roles,{[k]:r});
+    if(await evUpdate(p,{roles:{[k]:r},team:syncTeam(p,roles)})){ f.reset(); toast(`Added ${name}.`); } }
+  else if(id==="budForm"){ const p=S.plans.find(x=>x.id===S.eventId); const label=$("#budLabel").value.trim(); if(!label) return; if(await evUpdate(p,{budget:{[nid("b")]:{label,est:Number($("#budEst").value)||0,actual:0,paid:false,by:"",at:Date.now()}}})) f.reset(); }
+  else if(id==="btForm"){ const p=S.plans.find(x=>x.id===S.eventId); if(await evUpdate(p,{budgetTotal:Number($("#bTotal").value)||0})){ $("#bTotal").defaultValue=$("#bTotal").value; toast("Budget set."); } }
+  else if(id==="guestForm"){ const p=S.plans.find(x=>x.id===S.eventId); const cid=$("#gContact").value; const c=cid&&S.contacts.find(x=>x.id===cid); const name=$("#gName").value.trim()||(c&&c.name)||""; if(!name){ toast("Add a name or pick a contact."); return; }
+    if(await evUpdate(p,{guests:{[nid("g")]:{name,kind:$("#gKind").value,status:"idea",owner:(c&&c.owner)||"",contactId:cid||"",note:$("#gNote").value.trim(),at:Date.now()}}})){ f.reset(); f.querySelectorAll("select").forEach(x=>delete x.dataset.dirty); } }
+  else if(id==="runForm"){ const p=S.plans.find(x=>x.id===S.eventId); const what=$("#runWhat").value.trim(); if(!what) return; if(await evUpdate(p,{run:{[nid("r")]:{time:$("#runTime").value,what,who:$("#runWho").value,at:Date.now()}}})){ f.reset(); } }
+  else if(id==="reviewForm"){ const p=S.plans.find(x=>x.id===S.eventId); const review={registered:$("#rReg").value,attendance:$("#rAtt").value,rating:$("#rRate").value,wentWell:$("#rWell").value.trim(),improve:$("#rImprove").value.trim(),photos:$("#rPhotos").value.trim()};
+    if(await evUpdate(p,{review},"wrote the review for")){ f.querySelectorAll("input,textarea").forEach(el=>el.defaultValue=el.value); toast("Review saved."); } }
   else if(id==="quickForm"){ const u=$("#quickUrl").value.trim(); if(!u) return; $("#quickUrl").value=""; openItem(null,{url:/^https?:\/\//i.test(u)?u:"https://"+u}); }
-  else if(id==="ckForm"){ const inp=$("#ckText"); const text=inp.value.trim(); if(!text) return; const p=S.plans.find(x=>x.id===S.drawer.id); const k="c"+Date.now().toString(36);
-    inp.value=""; inp.blur(); if(await upd("plans",p.id,{checklist:{[k]:{text,done:false,at:Date.now()}},...stamp()})) S.drawer.base=null; }
+  else if(id==="ckForm"){ const inp=$("#ckText"); const text=inp.value.trim(); if(!text) return; const p=S.plans.find(x=>x.id===S.eventId); const k=nid("c");
+    inp.value=""; inp.defaultValue=""; await evUpdate(p,{checklist:{[k]:{text,done:false,at:Date.now()}}}); }
   else if(id==="cForm"){ const inp=$("#cText"); const text=inp.value.trim(); if(!text) return; const iid=S.drawer.id, it=S.items.find(i=>i.id===iid); const cid="c"+Date.now().toString(36)+Math.random().toString(36).slice(2,6); const mentions=mentionsIn(text);
     inp.value=""; if(await upd("items",iid,{comments:{[cid]:{by:S.meId,text:text.slice(0,2000),at:Date.now(),mentions}}})) logAct(mentions.length?`mentioned ${mentions.map(firstName).join(", ")} on`:"commented on",it.title,iid); else inp.value=text; }
   else if(id==="accessForm"){ const em=$("#accEmail").value.trim().toLowerCase(); const list=$("#accRole").value;
@@ -756,9 +959,19 @@ document.addEventListener("input", e=>{
   if(e.target.id==="cq"){ S.cf.q=e.target.value; clearTimeout(S._cT); S._cT=setTimeout(render,200); }
 });
 document.addEventListener("change", e=>{
-  const id=e.target.id, ds=e.target.dataset;
+  const id=e.target.id, ds=e.target.dataset; if(e.target.tagName==="SELECT") e.target.dataset.dirty="1";
   if(id==="ftype"){S.f.type=e.target.value;render();} else if(id==="fwho"){S.f.who=e.target.value;render();} else if(id==="ftag"){S.f.tag=e.target.value;render();} else if(id==="ckind"){S.cf.kind=e.target.value;render();}
   else if(id==="intro"){ saveSettings({draftIntro:e.target.value}); }
+  else if(ds.role!==undefined&&S.view==="event"){ const p=S.plans.find(x=>x.id===S.eventId); const r=Object.assign({},(p.roles||{})[ds.role],{uid:e.target.value}); const roles=Object.assign({},p.roles,{[ds.role]:r});
+    const patch={roles:{[ds.role]:{uid:e.target.value}},team:syncTeam(p,roles)}; if(ds.role==="lead") patch.lead=e.target.value; const who=e.target.value; evUpdate(p,patch,who?`made ${firstName(who)} ${r.name} for`:null).then(async ok=>{ delete e.target.dataset.dirty; if(!ok||!who) return;
+      const secs=Object.entries(SECTION_ROLE).filter(([,rk])=>rk===ds.role).map(([sec])=>sec); const open=A("tasks").filter(t=>t.planId===p.id&&!t.done&&!t.assignee&&secs.includes(t.section||"General"));
+      for(const t of open) await upd("tasks",t.id,{assignee:who,...stamp()}); if(open.length) toast(`${firstName(who)} also got the ${plural(open.length,"unassigned task")} in ${secs.join(" / ")}.`); }); }
+  else if(ds.bud){ const v=e.target.type==="checkbox"?e.target.checked:e.target.tagName==="SELECT"?e.target.value:(Number(e.target.value)||0); evUpdate(S.plans.find(x=>x.id===S.eventId),{budget:{[ds.bud]:{[ds.f]:v}}}).then(()=>{ e.target.defaultValue=e.target.value; delete e.target.dataset.dirty; if(e.target.type==="checkbox") e.target.defaultChecked=e.target.checked; }); }
+  else if(ds.guest){ evUpdate(S.plans.find(x=>x.id===S.eventId),{guests:{[ds.guest]:{[ds.f]:e.target.value}}}).then(()=>delete e.target.dataset.dirty); }
+  else if(ds.run){ evUpdate(S.plans.find(x=>x.id===S.eventId),{run:{[ds.run]:{[ds.f]:e.target.value}}}).then(()=>{ e.target.defaultValue=e.target.value; delete e.target.dataset.dirty; }); }
+  else if(ds.evsec!==undefined){ const p=S.plans.find(x=>x.id===S.eventId); const a=e.target.form.querySelector("[name=assignee]"); if(a){ a.value=roleFor(p,e.target.value); a.dataset.dirty="1"; } }
+  else if(id==="gContact"){ const c=S.contacts.find(x=>x.id===e.target.value); if(c){ $("#gName").value=c.name; const k={speaker:"speaker",sponsor:"sponsor",partner:"partner"}[c.kind]; if(k) $("#gKind").value=k; } }
+  else if(id==="mRepeat"){ const w=$("#mUntilWrap"); if(w) w.hidden=e.target.value==="none"; }
   else if(id==="dUrl"){ const u=e.target.value.trim(); if(u&&S.drawer&&!S.drawer.id){ readItemForm(); if(!S.drawer.draft.title) fetchMeta(u); } }
   else if(e.target.name==="dType"&&S.drawer){ readItemForm(); bump(); }
   else if(id==="dStatus"&&ds.quickstage&&S.drawer){ const st=e.target.value; moveStage(S.drawer.id,st).then(()=>{ if(S.drawer){ S.drawer.draft.status=st; toast(`Moved to ${STAGE[st]}.`);} }); }
@@ -791,7 +1004,7 @@ function openSettings(){
 
 // ───────── routing + boot ─────────
 const ALLV=["home","inbox","board","calendar","tasks","events","contacts","places","issue","sources","team","archive","trash"];
-function route(){ const h=location.hash.replace("#",""); S.view=ALLV.includes(h)?h:"home"; render(); }
+function route(){ const h=location.hash.replace("#",""); if(h.startsWith("event-")){ if(S.eventId!==h.slice(6)){ S.etab="overview"; S.evConfirmDel=false; } S.view="event"; S.eventId=h.slice(6); window.scrollTo(0,0); } else S.view=ALLV.includes(h)?h:"home"; render(); }
 window.addEventListener("hashchange",route);
 window.addEventListener("people-changed",e=>{ S.known=e.detail||[]; S.profiles={}; render(); });
 async function boot(){
