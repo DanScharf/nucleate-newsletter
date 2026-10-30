@@ -58,8 +58,22 @@ const nameOf = id => { if(!id) return "Someone"; const p=S.profiles[id]; return 
 const firstName = id => nameOf(id).split(" ")[0];
 const avOf = id => (S.profiles[id]&&S.profiles[id].avatarUrl) || "";
 const avImg = id => avOf(id) ? `<img class="av" src="${esc(avOf(id))}" alt="" referrerpolicy="no-referrer">` : "";
-const people = () => { const s=new Set(); if(S.meId) s.add(S.meId); S.known.forEach(id=>s.add(id)); S.items.forEach(i=>{i.addedBy&&s.add(i.addedBy); i.owner&&s.add(i.owner);}); return [...s]; };
+const people = () => { const s=new Set(); if(S.meId) s.add(S.meId); S.known.forEach(id=>s.add(id)); S.items.forEach(i=>{i.addedBy&&s.add(i.addedBy); iOwners(i).forEach(o=>s.add(o));}); return [...s]; };
 const peopleOpts = (sel, blank) => (blank?`<option value="">${esc(blank)}</option>`:"")+people().map(id=>`<option value="${esc(id)}" ${sel===id?"selected":""}>${esc(nameOf(id))}${id===S.meId?" (you)":""}</option>`).join("");
+const arr = v => Array.isArray(v)? v.filter(Boolean) : (v? [v] : []);
+const tAss = t => (t.assignees&&t.assignees.length)? t.assignees : arr(t.assignee);
+const iOwners = i => (i.owners&&i.owners.length)? i.owners : arr(i.owner);
+const cOwners = c => (c.owners&&c.owners.length)? c.owners : arr(c.owner);
+const rUids = r => r? ((r.uids&&r.uids.length)? r.uids : arr(r.uid)) : [];
+const gOwners = g => (g.owners&&g.owners.length)? g.owners : arr(g.owner);
+const runWho = x => (x.whos&&x.whos.length)? x.whos : arr(x.who);
+const secOwners = k => arr((settings().owners||{})[k]);
+const andList = a => a.length<=1? (a[0]||"") : a.slice(0,-1).join(", ")+" and "+a[a.length-1];
+const whoHtml = (ids, none) => ids.length? ids.map(avImg).join("")+`<span>${esc(andList(ids.map(firstName)))}</span>` : (none||`<span>Unassigned</span>`);
+// Multi-person picker: tap names to add/remove people. Value lives in a hidden input (comma-separated ids).
+function pick(key, sel, opt={}){ sel=arr(sel); return `<div class="ppick" role="group" aria-label="${esc(opt.label||"People")}" data-pp="${esc(key)}" data-default="${esc(sel.join(","))}"${opt.save?` data-ppsave="${esc(opt.save)}"`:""}>${people().map(id=>`<button type="button" class="pp" data-ppid="${esc(id)}" aria-pressed="${sel.includes(id)}" ${opt.dis?"disabled":""}>${avImg(id)}<span>${esc(firstName(id))}</span></button>`).join("")||`<span class="hint">No teammates yet</span>`}<input type="hidden" name="${esc(opt.name||key)}" value="${esc(sel.join(","))}"></div>`; }
+const pickVal = box => box? (box.querySelector("input[type=hidden]").value||"").split(",").filter(Boolean) : [];
+function pickSet(box, ids){ if(!box) return; box.querySelector("input[type=hidden]").value=ids.join(","); box.querySelectorAll(".pp").forEach(b=>b.setAttribute("aria-pressed", String(ids.includes(b.dataset.ppid)))); }
 const upvotes = it => Object.values(it.votes||{}).filter(v=>v===1).length;
 const downvotes = it => Object.values(it.votes||{}).filter(v=>v===-1).length;
 const tcol = t => (TYPE[t]||{color:"var(--t-industry)"}).color;
@@ -71,8 +85,8 @@ const roleOf = email => email===ownerEmail()? "Owner" : accessList("admins").inc
 const canEditItem = it => S.canWrite && (!it || isAdmin() || it.addedBy===S.meId);
 const canEditMeet = mt => S.canWrite && (!mt || isAdmin() || mt.createdBy===S.meId);
 const canEditTask = t => S.canWrite && (!t || isAdmin() || t.createdBy===S.meId);
-const canEditPlan = p => S.canWrite && (!p || isAdmin() || p.createdBy===S.meId || p.lead===S.meId || (p.team||[]).includes(S.meId));
-const canEditContact = c => S.canWrite && (!c || isAdmin() || c.createdBy===S.meId || c.owner===S.meId);
+const canEditPlan = p => S.canWrite && (!p || isAdmin() || p.createdBy===S.meId || pLeads(p).includes(S.meId) || (p.team||[]).includes(S.meId));
+const canEditContact = c => S.canWrite && (!c || isAdmin() || c.createdBy===S.meId || cOwners(c).includes(S.meId));
 const titleOf = (col,x) => x.title || x.name || "Untitled";
 const titleCase = s => s.charAt(0).toUpperCase()+s.slice(1);
 
@@ -112,7 +126,7 @@ function views(){ const v=[["home","Home"],["board","Pipeline"],["issue","This i
 function doRender(){
   $("#who").innerHTML = S.meId ? avImg(S.meId)+`<span>${esc(nameOf(S.meId))}</span>${S.myEmail&&roleOf(S.myEmail)?`<span class="chip" style="background:rgba(255,255,255,.1);color:var(--band-ink)">${esc(roleOf(S.myEmail))}</span>`:""}` : "";
   $("#btnNew").hidden = !S.canWrite || !S.db; $("#btnSettings").hidden = !S.db;
-  const myOpen=A("tasks").filter(t=>!t.done&&t.assignee===S.meId).length;
+  const myOpen=A("tasks").filter(t=>!t.done&&tAss(t).includes(S.meId)).length;
   const counts = {board:A("items").filter(i=>i.status!=="archived").length, calendar:upcoming(30).length, places:A("items").filter(i=>i.status!=="archived"&&i.location).length, issue:A("items").filter(i=>i.status==="issue").length,
     sources:S.sources.length, archive:S.issues.length, tasks:myOpen, events:A("plans").filter(p=>p.stage!=="done").length, contacts:A("contacts").length, inbox:A("suggestions").length};
   $("#tabs").innerHTML = S.db ? views().map(([k,l])=>`<a href="#${k}" ${S.view===k||(S.view==="event"&&k==="events")?'aria-current="page"':""}>${l}${counts[k]?`<span class="n">${counts[k]}</span>`:""}</a>`).join("") : "";
@@ -123,7 +137,9 @@ function doRender(){
   // Keep whatever someone is typing when live updates from teammates re-draw the page.
   const y=window.scrollY; const ae=document.activeElement; const focusKey=ae&&m.contains(ae)?fieldKey(ae):null; let sel=null; try{ sel=focusKey&&ae.selectionStart!=null?[ae.selectionStart,ae.selectionEnd]:null; }catch{}
   const edited={}; m.querySelectorAll("input,textarea,select").forEach(el=>{ const k=fieldKey(el); if(!k) return; if(el.type==="checkbox"||el.type==="radio"){ if(el.checked!==el.defaultChecked) edited[k]={c:el.checked}; } else if(el.tagName==="SELECT"){ const o=el.options[el.selectedIndex]; if(o&&!o.defaultSelected&&el.dataset.dirty) edited[k]={v:el.value}; } else if(el.value!==el.defaultValue) edited[k]={v:el.value}; });
+  const picks={}; m.querySelectorAll(".ppick[data-dirty]").forEach(b=>picks[b.dataset.pp]=pickVal(b));
   m.innerHTML = banner + v(); window.scrollTo(0,y);
+  m.querySelectorAll(".ppick").forEach(b=>{ if(picks[b.dataset.pp]){ pickSet(b,picks[b.dataset.pp]); b.dataset.dirty="1"; } });
   m.querySelectorAll("input,textarea,select").forEach(el=>{ const k=fieldKey(el); if(!k) return; const e=edited[k]; if(e){ if("c" in e) el.checked=e.c; else el.value=e.v; if(el.tagName==="SELECT") el.dataset.dirty="1"; } if(k===focusKey){ el.focus(); try{ if(sel) el.setSelectionRange(sel[0],sel[1]); }catch{} } });
   window.__mountDNA&&window.__mountDNA();
   renderDrawer(); refreshProfiles(); purgeOld();
@@ -192,7 +208,7 @@ function filterBar(){
   </div>`;
 }
 function filtered(list){ const {q,type,who,tag}=S.f; const ql=q.trim().toLowerCase();
-  return list.filter(i=>(!type||i.type===type)&&(!who||i.addedBy===who||i.owner===who)&&(!tag||(i.tags||[]).includes(tag))&&(!ql||[i.title,i.summary,i.location,i.city,i.url,(i.tags||[]).join(" ")].join(" ").toLowerCase().includes(ql))); }
+  return list.filter(i=>(!type||i.type===type)&&(!who||i.addedBy===who||iOwners(i).includes(who))&&(!tag||(i.tags||[]).includes(tag))&&(!ql||[i.title,i.summary,i.location,i.city,i.url,(i.tags||[]).join(" ")].join(" ").toLowerCase().includes(ql))); }
 function dateChip(i){
   if(i.date){ const d=daysTo(i.date); const cls=d<0?"":d<=2?"hot":d<=7?"soon":""; return `<span class="chip ${cls}">🗓 ${d===0?"Today":d===1?"Tomorrow":fmtD(i.date)}${d<0?" · past":""}</span>`; }
   if(i.deadline){ const d=daysTo(i.deadline); if(d>=0) return `<span class="chip ${d<=3?"hot":d<=7?"soon":""}">⏳ ${d===0?"today":d+"d left"}</span>`; }
@@ -205,12 +221,14 @@ function actRow(a){ return `<div class="ev-row">${avImg(a.by)}<div class="txt"><
 function taskRow(t, ctx){
   const link = !ctx && t.meetingId ? (()=>{ const m=S.meetings.find(x=>x.id===t.meetingId); return m?`<a href="#" data-meet="${esc(m.id)}"${t.occurrence?` data-occ="${esc(t.occurrence)}"`:""} class="hint">📅 ${esc(m.title)}${t.occurrence?" · "+esc(fmtD(occOf(m,t.occurrence).date)):""}</a>`:""; })()
              : !ctx && t.planId ? (()=>{ const p=S.plans.find(x=>x.id===t.planId); return p?`<a href="#" data-plan="${esc(p.id)}" class="hint">🎪 ${esc(p.title)}</a>`:""; })() : "";
-  return `<div class="task ${t.done?"done":""}"><input type="checkbox" data-done="${esc(t.id)}" ${t.done?"checked":""} ${S.canWrite?"":"disabled"} aria-label="Done"><div class="grow"><a href="#" class="t" data-task="${esc(t.id)}" dir="auto">${esc(t.title)}</a><div class="meta">${t.assignee?`${avImg(t.assignee)}<span>${esc(firstName(t.assignee))}</span>`:`<span>Unassigned</span>`}${dueChip(t.due,t.done)}${link}</div></div></div>`;
+  return `<div class="task ${t.done?"done":""}"><input type="checkbox" data-done="${esc(t.id)}" ${t.done?"checked":""} ${S.canWrite?"":"disabled"} aria-label="Done"><div class="grow"><a href="#" class="t" data-task="${esc(t.id)}" dir="auto">${esc(t.title)}</a><div class="meta">${whoHtml(tAss(t))}${dueChip(t.due,t.done)}${link}</div></div></div>`;
 }
-function taskAddForm(ctxAttr){ return S.canWrite? `<form class="taskAdd" ${ctxAttr||""}><input name="title" placeholder="Add a task…" aria-label="Task" dir="auto" ${ctxAttr?"":'id="tTitle"'}><select name="assignee" aria-label="Assign to">${peopleOpts(S.meId,"Unassigned")}</select><input name="due" type="date" aria-label="Due date"><button class="btn" type="submit">Add</button></form>` : ""; }
+function taskAddForm(ctxAttr, key, def){ def=def===undefined?[S.meId]:arr(def); return S.canWrite? `<form class="taskAdd" ${ctxAttr||""}><div class="taskAddRow"><input name="title" placeholder="Add a task…" aria-label="Task" dir="auto" ${ctxAttr?"":'id="tTitle"'}><input name="due" type="date" aria-label="Due date"><button class="btn" type="submit">Add</button></div><div class="taskAddWho"><span class="hint">Who:</span>${pick("ta-"+(key||"main"),def,{name:"assignees",label:"Assign to"})}</div></form>` : ""; }
 async function addTask(form){ const f=new FormData(form); const title=String(f.get("title")||"").trim(); if(!title){ toast("Write the task first."); return; }
-  const data={title,assignee:String(f.get("assignee")||""),due:String(f.get("due")||""),done:false,notes:"",meetingId:form.dataset.meeting||"",occurrence:form.dataset.occ||"",planId:form.dataset.forplan||form.dataset.plan||"",section:String(f.get("section")||""),relDays:null,createdBy:S.meId,createdAt:Date.now(),...stamp()};
-  const id=await add("tasks",data); if(id){ form.reset(); form.querySelectorAll("select").forEach(x=>delete x.dataset.dirty); const a=form.querySelector('[name=assignee]'); if(a&&!form.dataset.forplan) a.value=S.meId; logAct(data.assignee&&data.assignee!==S.meId?`gave ${firstName(data.assignee)} a task:`:"added a task:",title); toast("Task added."); } }
+  const ass=String(f.get("assignees")||"").split(",").filter(Boolean);
+  const data={title,assignees:ass,assignee:ass[0]||"",due:String(f.get("due")||""),done:false,notes:"",meetingId:form.dataset.meeting||"",occurrence:form.dataset.occ||"",planId:form.dataset.forplan||form.dataset.plan||"",section:String(f.get("section")||""),relDays:null,createdBy:S.meId,createdAt:Date.now(),...stamp()};
+  const id=await add("tasks",data); if(id){ const box=form.querySelector(".ppick"); form.reset(); form.querySelectorAll("select").forEach(x=>delete x.dataset.dirty); if(box){ pickSet(box,(box.dataset.default||"").split(",").filter(Boolean)); delete box.dataset.dirty; }
+    const others=ass.filter(u=>u!==S.meId); logAct(others.length?`gave ${andList(others.map(firstName))} a task:`:"added a task:",title); toast("Task added."); } }
 async function toggleTask(id){ const t=S.tasks.find(x=>x.id===id); if(!t) return; const done=!t.done; if(await upd("tasks",id,{done,doneAt:done?Date.now():null,doneBy:done?S.meId:null,...stamp()})&&done) logAct("finished",t.title); }
 
 // mentions
@@ -228,7 +246,7 @@ function forYou(){
 function vHome(){
   const st=settings(); const inIssue=A("items").filter(i=>i.status==="issue").length;
   const up=upcoming(14); const nextMeet=entries().find(x=>x.kind==="meeting"&&x.date>=todayS());
-  const myTasks=A("tasks").filter(t=>!t.done&&t.assignee===S.meId).sort((a,b)=>(a.due||"9")<(b.due||"9")?-1:1);
+  const myTasks=A("tasks").filter(t=>!t.done&&tAss(t).includes(S.meId)).sort((a,b)=>(a.due||"9")<(b.due||"9")?-1:1);
   const sugg=A("suggestions"); const fy=forYou(); const hello=S.meId? firstName(S.meId) : "";
   return `<section class="hero"><canvas class="dna" aria-hidden="true"></canvas><div class="hx">
       <div class="kicker">ISSUE #${st.nextIssue} · IN PROGRESS</div>
@@ -272,7 +290,7 @@ function card(i){
     <div class="meta"><span class="chip type" style="--tc:${tcol(i.type)}"><span class="dot"></span>${esc(tlabel(i.type))}</span>${dateChip(i)}${i.recurring&&i.recurring!=="none"?`<span class="chip">↻ ${esc(i.recurring)}</span>`:""}</div>
     <div class="t" dir="auto">${esc(i.title||"Untitled")}</div>
     ${i.location?`<div class="meta" dir="auto">📍 ${esc(i.location)}</div>`:""}
-    <div class="foot"><div class="meta">${avImg(i.addedBy)}${i.owner&&i.owner!==i.addedBy?" ✎ "+avImg(i.owner):""}<span>${esc(host(i.url))}</span>${cc?`<span>💬 ${cc}</span>`:""}</div>
+    <div class="foot"><div class="meta">${avImg(i.addedBy)}${iOwners(i).filter(o=>o!==i.addedBy).length?" ✎ "+iOwners(i).filter(o=>o!==i.addedBy).map(avImg).join(""):""}<span>${esc(host(i.url))}</span>${cc?`<span>💬 ${cc}</span>`:""}</div>
       <div class="votes">${S.canWrite&&ns&&(ns!=="archived"||canEditItem(i))?`<button data-next="${esc(i.id)}" title="Move to ${esc(STAGE[ns])}" aria-label="Move to ${esc(STAGE[ns])}">→</button>`:""}<button data-vote="1" data-id="${esc(i.id)}" class="${my===1?"on":""}" aria-label="Upvote">👍 ${upvotes(i)||""}</button><button data-vote="-1" data-id="${esc(i.id)}" class="${my===-1?"on":""}" aria-label="Downvote">👎 ${downvotes(i)||""}</button></div>
     </div></div>`;
 }
@@ -314,10 +332,10 @@ function vTasks(){
   const sortT=a=>a.slice().sort((x,y)=>(x.due||"9999")<(y.due||"9999")?-1:(x.due||"9999")>(y.due||"9999")?1:(x.createdAt||0)-(y.createdAt||0));
   const open=all.filter(t=>!t.done); const done=all.filter(t=>t.done).sort((a,b)=>(b.doneAt||0)-(a.doneAt||0));
   let body="";
-  if(f==="mine"){ const mine=sortT(open.filter(t=>t.assignee===S.meId)); const gave=sortT(open.filter(t=>t.createdBy===S.meId&&t.assignee&&t.assignee!==S.meId));
+  if(f==="mine"){ const mine=sortT(open.filter(t=>tAss(t).includes(S.meId))); const gave=sortT(open.filter(t=>t.createdBy===S.meId&&tAss(t).length&&!tAss(t).includes(S.meId)));
     body=`<div class="panel"><div class="panel-h"><h3>Assigned to me</h3><span class="hint">${mine.length}</span></div>${mine.length?`<div class="tasks">${mine.map(t=>taskRow(t)).join("")}</div>`:`<div class="colempty">Nothing assigned to you.</div>`}</div>
       ${gave.length?`<div class="panel" style="margin-top:12px"><div class="panel-h"><h3>I asked others</h3><span class="hint">${gave.length}</span></div><div class="tasks">${gave.map(t=>taskRow(t)).join("")}</div></div>`:""}`; }
-  else if(f==="all"){ const groups={}; open.forEach(t=>{ (groups[t.assignee||""]=groups[t.assignee||""]||[]).push(t); });
+  else if(f==="all"){ const groups={}; open.forEach(t=>{ const a=tAss(t); (a.length?a:[""]).forEach(u=>(groups[u]=groups[u]||[]).push(t)); });
     const keys=Object.keys(groups).sort((a,b)=>a===""?1:b===""?-1:nameOf(a).localeCompare(nameOf(b)));
     body=keys.length? keys.map(k=>`<div class="panel" style="margin-bottom:12px"><div class="panel-h"><h3>${k?avImg(k)+" "+esc(nameOf(k)):"Unassigned"}</h3><span class="hint">${groups[k].length}</span></div><div class="tasks">${sortT(groups[k]).map(t=>taskRow(t)).join("")}</div></div>`).join("") : `<div class="empty"><b>No open tasks</b>Add one above, or create action items from a meeting.</div>`; }
   else body=done.length? `<div class="panel"><div class="tasks">${done.slice(0,60).map(t=>taskRow(t)).join("")}</div></div>` : `<div class="empty"><b>Nothing finished yet</b></div>`;
@@ -332,7 +350,7 @@ function vContacts(){ const {q,kind}=S.cf; const ql=q.trim().toLowerCase();
   return `<h2>Contacts</h2><p class="sub">Speakers, sponsors, partner groups and labs we work with, and who on the team owns each relationship.</p>
     <div class="toolbar"><input type="search" id="cq" placeholder="Search names, orgs, notes…" value="${esc(q)}" aria-label="Search contacts"><select id="ckind" aria-label="Kind"><option value="">All kinds</option>${CKINDS.map(([k,l])=>`<option value="${k}" ${kind===k?"selected":""}>${l}</option>`).join("")}</select>${S.canWrite?`<button class="btn pri" data-act="new-contact">+ Add contact</button>`:""}</div>
     ${list.length?`<div class="list">${list.map(c=>`<div class="row" data-contact="${esc(c.id)}" role="button" tabindex="0" style="cursor:pointer"><div class="grow"><div class="t" dir="auto">${esc(c.name)}</div><div class="s" dir="auto">${[c.role,c.org].filter(Boolean).map(esc).join(" · ")||"&nbsp;"}</div></div>
-      <span class="chip">${esc(CKIND[c.kind]||"Other")}</span>${c.owner?`<span class="meta" style="display:flex;gap:6px;align-items:center;font-size:12px;color:var(--muted)">${avImg(c.owner)}${esc(firstName(c.owner))}</span>`:""}<span class="chip ${stale(c)?"soon":"ok"}">${c.lastContact?"Last contact "+esc(fmtD(c.lastContact)):"Not contacted yet"}</span></div>`).join("")}</div>`
+      <span class="chip">${esc(CKIND[c.kind]||"Other")}</span>${cOwners(c).length?`<span class="meta" style="display:flex;gap:6px;align-items:center;font-size:12px;color:var(--muted)">${whoHtml(cOwners(c))}</span>`:""}<span class="chip ${stale(c)?"soon":"ok"}">${c.lastContact?"Last contact "+esc(fmtD(c.lastContact)):"Not contacted yet"}</span></div>`).join("")}</div>`
       :`<div class="empty"><b>${A("contacts").length?"No matches":"No contacts yet"}</b>${A("contacts").length?"Try a different search.":"Add the people you work with so the whole team knows who to talk to."}</div>`}`; }
 
 function vPlaces(){
@@ -365,7 +383,7 @@ function composeText(){
 function waHtml(t){ return esc(t).replace(/\*([^*\n]+)\*/g,"<b>$1</b>").replace(/(^|[\s(])_([^_\n]+)_/g,"$1<i>$2</i>"); }
 function vIssue(){
   const st=settings(); const secs=issueItems(); const total=Object.values(secs).reduce((a,b)=>a+b.length,0);
-  const ownerSel=key=>`<select data-owner="${key}" aria-label="Section owner" ${isAdmin()?"":"disabled"}>${peopleOpts(st.owners&&st.owners[key],"Unassigned")}</select>`;
+  const ownerSel=key=>pick("sec-"+key,secOwners(key),{save:"sec:"+key,dis:!isAdmin(),label:"Section owners"});
   const left=`<div class="list" style="gap:12px">
     <div class="sec"><div class="sec-h"><h3>Intro</h3></div><textarea id="intro" rows="3" dir="auto" placeholder="${isAdmin()?"A line or two to open the issue (optional)":"Admins write the intro"}" ${isAdmin()?"":"disabled"}>${esc(st.draftIntro)}</textarea></div>
     ${SECTIONS.map(s=>`<div class="sec"><div class="sec-h"><h3>${s.title}</h3>${s.key==="soon"?`<span class="eyebrow">auto: within 7 days</span>`:ownerSel(s.key)}</div>
@@ -394,8 +412,8 @@ function vSources(){
 function vTeam(){
   const ws=weekStart(); const ids=people(); const st=settings(); const secName=k=>(SECTIONS.find(s=>s.key===k)||{}).title;
   const streak=id=>{ const weeks=new Set(A("items").filter(i=>i.addedBy===id&&i.createdAt).map(i=>weekStart(i.createdAt))); let w=weeks.has(ws)?ws:ws-7*864e5, n=0; while(weeks.has(w)){n++; w=weekStart(w-864e5);} return n; };
-  const cards=ids.map(id=>{ const mine=A("items").filter(i=>i.addedBy===id); const wk=mine.filter(i=>(i.createdAt||0)>=ws).length; const tasks=A("tasks").filter(t=>t.assignee===id&&!t.done).length;
-    const owns=Object.entries(st.owners||{}).filter(([k,v])=>v===id).map(([k])=>secName(k)).filter(Boolean); const p=S.profiles[id]; const role=p&&p.email?roleOf(String(p.email).toLowerCase()):"";
+  const cards=ids.map(id=>{ const mine=A("items").filter(i=>i.addedBy===id); const wk=mine.filter(i=>(i.createdAt||0)>=ws).length; const tasks=A("tasks").filter(t=>tAss(t).includes(id)&&!t.done).length;
+    const owns=Object.entries(st.owners||{}).filter(([k,v])=>arr(v).includes(id)).map(([k])=>secName(k)).filter(Boolean); const p=S.profiles[id]; const role=p&&p.email?roleOf(String(p.email).toLowerCase()):"";
     return `<div class="panel person"><div class="hd">${avImg(id)}<div><h3>${esc(nameOf(id))} ${role?`<span class="chip">${role}</span>`:""}</h3><div class="hint">${owns.length?"Owns "+owns.map(esc).join(", "):"No newsletter sections"}</div></div></div>
       <div class="stats"><div class="stat"><div class="v">${wk}</div><div class="l">added this week</div></div><div class="stat"><div class="v">${tasks}</div><div class="l">open tasks</div></div><div class="stat"><div class="v">${streak(id)}🔥</div><div class="l">week streak</div></div></div></div>`; }).join("");
   const feed=S.activity.length? `<div class="feed">${S.activity.map(actRow).join("")}</div>` : `<div class="colempty">Everything the team adds, edits, votes on or sends shows up here.</div>`;
@@ -466,11 +484,11 @@ function openItem(id, preset){ const it=id? S.items.find(i=>i.id===id) : null; i
   if(!id&&preset&&preset.url&&!S.drawer.draft.title) fetchMeta(preset.url); }
 function drawItem(key, live){
   const D=S.drawer, d=D.draft, isNew=!D.id, it=isNew?null:S.items.find(i=>i.id===D.id);
-  if(live){ const c=$("#cmts"); if(c&&it) c.innerHTML=commentsHtml(it); const s=$("#staleBox"); if(s) s.innerHTML=staleHtml(it); return; }
+  if(live){ const c=$("#cmts"); if(c&&it) c.innerHTML=commentsHtml(it); const s=$("#staleBox"); if(s) s.innerHTML=staleHtml(it); const h=$("#itemHint"); if(h&&it){ const tmp=document.createElement("div"); tmp.innerHTML=itemHintHtml(it); h.innerHTML=tmp.firstElementChild.innerHTML; } return; }
   const ro=!canEditItem(it), locked=ro&&S.canWrite, dis=ro?"disabled":"", isEvent=d.type==="event";
   return shell(key, isNew?"Add item":"Edit item", `
     <div class="dh"><h2>${isNew?"Add to the desk":"Newsletter item"}</h2><button class="btn ghost" data-act="close" aria-label="Close">✕</button></div>
-    ${it?`<div class="hint">Added by ${esc(nameOf(it.addedBy))} ${it.createdAt?agoPhrase(it.createdAt):""}${it.owner?` · ${esc(nameOf(it.owner))} is writing it`:""}${it.issueNo?` · ran in issue #${it.issueNo}`:""}${it.suggestedBy?` · suggested by ${esc(it.suggestedBy)}`:""}</div>`:""}
+    ${it?itemHintHtml(it):""}
     <div id="staleBox">${staleHtml(it)}</div>
     ${locked?`<div class="dup">${esc(nameOf(it.addedBy))} added this, so only they or an admin can edit the details. You can still change the stage, vote, claim it and comment.</div>`:""}
     <form class="box" id="itemForm" novalidate>
@@ -485,6 +503,7 @@ function drawItem(key, live){
       <div id="formErr"></div>
       <details class="more" ${isNew?"":"open"}><summary>More details (optional)</summary><div style="display:flex;flex-direction:column;gap:12px">
         ${isNew?"":`<label class="f">Stage<select id="dStatus" ${S.canWrite?"":"disabled"} ${locked?'data-quickstage="1"':""}>${STAGES.filter(([k])=>!locked||k!=="archived"||d.status==="archived").map(([k,l])=>`<option value="${k}" ${d.status===k?"selected":""}>${l}</option>`).join("")}</select></label>`}
+        ${isNew||ro?"":`<div class="f" style="display:flex;flex-direction:column;gap:6px;font-size:12.5px;color:var(--muted);font-weight:500">Writing it${pick("dWriters",iOwners(it),{label:"Who's writing it"})}</div>`}
         <label class="f">Newsletter blurb<textarea id="dSummary" rows="3" dir="auto" placeholder="One or two short lines readers will see" ${dis}>${esc(d.summary||d.why||"")}</textarea></label>
         <div class="grid2">
           <label class="f">City / campus<input id="dCity" dir="auto" value="${esc(d.city)}" placeholder="Haifa" ${dis}></label>
@@ -495,10 +514,11 @@ function drawItem(key, live){
         <label class="f">Tags (comma separated)<input id="dTags" dir="auto" value="${esc((d.tags||[]).join(", "))}" placeholder="biotech, medtech" ${dis}></label>
       </div></details>
       <div id="dupBox">${D.dup?`<div class="dup">Looks like this is already on the desk: <a href="#" data-open="${esc(D.dup.id)}">${esc(D.dup.title)}</a> (${esc(STAGE[D.dup.status||"found"])}). Save again to add it anyway.</div>`:""}</div>
-      ${!S.canWrite?"":`<div class="toolbar" style="margin:0">${ro?"":`<button class="btn pri" type="submit">${isNew?"Add to desk":"Save changes"}</button>`}${it&&it.owner!==S.meId?`<button type="button" class="btn" data-act="claim">✋ I'll write this</button>`:""}${it&&it.owner===S.meId?`<button type="button" class="btn" data-act="unclaim">Release</button>`:""}${it&&it.date?`<a class="btn" target="_blank" rel="noopener" href="${esc(gcalUrl({title:it.title,date:it.date,location:it.location,details:it.url}))}">+ Google Calendar</a>`:""}<span style="flex:1"></span>${it&&!ro?`<button type="button" class="btn ghost danger" data-act="del">Delete</button>`:""}</div>${delBlock("Move this item to the Trash?")}`}
+      ${!S.canWrite?"":`<div class="toolbar" style="margin:0">${ro?"":`<button class="btn pri" type="submit">${isNew?"Add to desk":"Save changes"}</button>`}${it&&!iOwners(it).includes(S.meId)?`<button type="button" class="btn" data-act="claim">✋ ${iOwners(it).length?"I'll help write this":"I'll write this"}</button>`:""}${it&&iOwners(it).includes(S.meId)?`<button type="button" class="btn" data-act="unclaim">I'm not writing it</button>`:""}${it&&it.date?`<a class="btn" target="_blank" rel="noopener" href="${esc(gcalUrl({title:it.title,date:it.date,location:it.location,details:it.url}))}">+ Google Calendar</a>`:""}<span style="flex:1"></span>${it&&!ro?`<button type="button" class="btn ghost danger" data-act="del">Delete</button>`:""}</div>${delBlock("Move this item to the Trash?")}`}
     </form>
     ${it?`<div class="box"><h3>Discussion</h3><div id="cmts">${commentsHtml(it)}</div>${!S.canWrite?"":`<form id="cForm" style="display:flex;flex-direction:column;gap:6px"><div style="display:flex;gap:8px"><input id="cText" dir="auto" placeholder="Add a note. Type @ and a name to notify someone" style="flex:1"><button class="btn" type="submit">Post</button></div>${mentionChips("cText")}</form>`}</div>`:""}`);
 }
+function itemHintHtml(it){ return `<div class="hint" id="itemHint">Added by ${esc(nameOf(it.addedBy))} ${it.createdAt?agoPhrase(it.createdAt):""}${iOwners(it).length?` · ${esc(andList(iOwners(it).map(firstName)))} ${iOwners(it).length>1?"are":"is"} writing it`:""}${it.issueNo?` · ran in issue #${it.issueNo}`:""}${it.suggestedBy?` · suggested by ${esc(it.suggestedBy)}`:""}</div>`; }
 function readItemForm(){ const d=S.drawer.draft, v=id=>{const e=$("#"+id); return e? e.value : undefined;}; const ty=document.querySelector('input[name="dType"]:checked');
   Object.assign(d,{type:ty?ty.value:d.type,title:(v("dTitle")||"").trim(),url:(v("dUrl")||"").trim(),summary:(v("dSummary")??d.summary??"").trim(),date:v("dDate")||"",location:(v("dLoc")||"").trim(),city:(v("dCity")??d.city??"").trim(),audience:v("dAud")??d.audience,recurring:v("dRec")??d.recurring,sourceId:v("dSrc")??d.sourceId??"",tags:(v("dTags")??(d.tags||[]).join(",")).split(",").map(s=>s.trim()).filter(Boolean)});
   if($("#dStatus")) d.status=$("#dStatus").value; if(d.location&&/^online$/i.test(d.location)) d.online=true; return d; }
@@ -521,7 +541,7 @@ async function submitItem(){
   const now=Date.now(); const fields=(({type,status,title,url,summary,date,location,city,audience,recurring,sourceId,online,tags})=>({type,status,title,url,summary,date,location,city,audience,recurring,sourceId,online:!!online,tags}))(d);
   try{
     if(!D.id){ fields.status="found"; if(d.suggestedBy) fields.suggestedBy=d.suggestedBy; const id=await saveItem(null,Object.assign(fields,{addedBy:S.meId,owner:null,votes:{},comments:{},createdAt:now,...stamp()}),true); logAct("added",d.title,id); if(D.fromPlan) await upd("plans",D.fromPlan,{itemId:id,...stamp()}); toast("Added to the desk."); }
-    else { const prev=S.items.find(i=>i.id===D.id); await saveItem(D.id,Object.assign(fields,stamp())); logAct(prev&&prev.status!==d.status?`moved to ${STAGE[d.status]}:`:"edited",d.title,D.id); toast("Saved."); }
+    else { const prev=S.items.find(i=>i.id===D.id); const wb=document.querySelector('.ppick[data-pp="dWriters"]'); if(wb){ const w=pickVal(wb); fields.owners=w; fields.owner=w[0]||null; } await saveItem(D.id,Object.assign(fields,stamp())); logAct(prev&&prev.status!==d.status?`moved to ${STAGE[d.status]}:`:"edited",d.title,D.id); toast("Saved."); }
     closeDrawer();
   }catch{}
 }
@@ -572,7 +592,7 @@ function drawMeeting(key, live){
     <div id="staleBox">${staleHtml(mt)}</div>
     ${mt?`<div class="box"><h3>Are you coming${ser?" on "+esc(fmtDW(o.date)):""}?</h3><div id="rsvpBox">${rsvpHtml(mt,ser?D.occ:"")}</div></div>`:""}
     ${occBox}
-    ${mt?`<div class="box"><h3>Action items${ser?" from this date":""}</h3><div id="actList">${actionList(mt,ser?D.occ:"")}</div>${taskAddForm(`data-meeting="${esc(mt.id)}"${ser?` data-occ="${esc(D.occ)}"`:""}`)}</div>`:""}
+    ${mt?`<div class="box"><h3>Action items${ser?" from this date":""}</h3><div id="actList">${actionList(mt,ser?D.occ:"")}</div>${taskAddForm(`data-meeting="${esc(mt.id)}"${ser?` data-occ="${esc(D.occ)}"`:""}`,"meet")}</div>`:""}
     ${ser?`<details class="box more"><summary>Edit the whole series</summary>${seriesForm}</details>`:seriesForm}`);
 }
 function actionList(mt, occ){ const ts=A("tasks").filter(t=>t.meetingId===mt.id&&(!occ||t.occurrence===occ)); return ts.length?`<div class="tasks">${ts.map(t=>taskRow(t,true)).join("")}</div>`:`<div class="colempty">No action items yet. Add who does what before you leave the meeting.</div>`; }
@@ -599,14 +619,15 @@ function drawTask(key, live){
     <div id="staleBox">${staleHtml(t)}</div>
     <form class="box" id="taskForm" novalidate>
       <label class="f"><span class="lh">Task<span class="req">*</span></span><input id="kTitle" dir="auto" value="${esc(d.title)}" ${dis}></label>
-      <div class="grid2"><label class="f">Assigned to<select id="kAss" ${dis}>${peopleOpts(d.assignee,"Unassigned")}</select></label><label class="f">Due<input id="kDue" type="date" value="${esc(d.due)}" ${dis}></label></div>
+      <div class="f" style="display:flex;flex-direction:column;gap:6px;font-size:12.5px;color:var(--muted);font-weight:500">Assigned to${pick("kAss",tAss(d),{dis:ro,label:"Assigned to"})}</div>
+      <div class="grid2"><label class="f">Due<input id="kDue" type="date" value="${esc(d.due)}" ${dis}></label></div>
       <label class="f">Notes<textarea id="kNotes" rows="3" dir="auto" ${dis}>${esc(d.notes)}</textarea></label>
       <div class="toolbar" style="margin:0">${ro?"":`<button class="btn pri" type="submit">Save changes</button>`}${S.canWrite?`<button type="button" class="btn" data-done="${esc(t.id)}">${t.done?"Mark not done":"✓ Mark done"}</button>`:""}<span style="flex:1"></span>${ro?"":`<button type="button" class="btn ghost danger" data-act="del">Delete</button>`}</div>
       ${ro?"":delBlock("Move this task to the Trash?")}</form>`);
 }
 async function submitTask(){ const D=S.drawer; const title=$("#kTitle").value.trim(); if(!title){ toast("The task needs a name."); return; }
-  const prev=S.tasks.find(x=>x.id===D.id); const assignee=$("#kAss").value;
-  if(await upd("tasks",D.id,{title,assignee,due:$("#kDue").value,notes:$("#kNotes").value.trim(),...stamp()})){ if(prev&&prev.assignee!==assignee&&assignee) logAct(`gave ${firstName(assignee)} a task:`,title); closeDrawer(); toast("Saved."); } }
+  const prev=S.tasks.find(x=>x.id===D.id); const ass=pickVal(document.querySelector('.ppick[data-pp="kAss"]'));
+  if(await upd("tasks",D.id,{title,assignees:ass,assignee:ass[0]||"",due:$("#kDue").value,notes:$("#kNotes").value.trim(),...stamp()})){ const added=ass.filter(u=>u!==S.meId&&!tAss(prev||{}).includes(u)); if(added.length) logAct(`gave ${andList(added.map(firstName))} a task:`,title); closeDrawer(); toast("Saved."); } }
 
 // plan (our events) ─ full event planner
 const EV_SECTIONS = ["General","Venue & logistics","Content & speakers","Marketing","Registration","Budget & sponsors","Follow-up"];
@@ -640,8 +661,10 @@ const TEMPLATES = {
 const live = m => Object.entries(m||{}).filter(([,v])=>v);
 const nid = p => p+Date.now().toString(36)+Math.random().toString(36).slice(2,5);
 const money = n => "₪"+Math.round(Number(n)||0).toLocaleString("en-US");
-const planTeam = p => { const s=new Set([p.createdBy,p.lead].filter(Boolean)); live(p.roles).forEach(([,r])=>r.uid&&s.add(r.uid)); return [...s]; };
-function roleFor(p, section){ const k=SECTION_ROLE[section]||"lead"; const r=(p.roles||{})[k]; return (r&&r.uid)||p.lead||""; }
+function pLeads(p){ const u=rUids((p.roles||{}).lead); return u.length?u:((p.leads&&p.leads.length)?p.leads:arr(p.lead)); }
+const planTeam = p => { const s=new Set([p.createdBy,...pLeads(p)].filter(Boolean)); live(p.roles).forEach(([,r])=>rUids(r).forEach(u=>s.add(u))); return [...s]; };
+// Who a new task in an area goes to: that area's role people, or the event leads.
+function roleFor(p, section){ const k=SECTION_ROLE[section]||"lead"; const u=rUids((p.roles||{})[k]); return u.length?u:pLeads(p); }
 
 function openPlan(id, date){ if(id){ location.hash="event-"+id; return; }
   openD("plan",{id:null,draft:{title:"",template:"workshop",date:date||"",time:"18:00",location:""}}); }
@@ -660,13 +683,13 @@ function drawPlan(key, live){ if(live) return; const d=S.drawer.draft;
 }
 async function submitPlan(){ const title=$("#pTitle").value.trim(); if(!title){ $("#pErr").innerHTML=`<div class="dup">Give the event a name first.</div>`; return; }
   const tk=(document.querySelector('input[name="pTpl"]:checked')||{}).value||"blank"; const tpl=TEMPLATES[tk]; const date=$("#pDate").value, time=$("#pTime").value, loc=$("#pLoc").value.trim();
-  const roles={}; EV_ROLES.forEach(([k,l],i)=>{ roles[k]={name:l,uid:k==="lead"?S.meId:"",at:i}; });
+  const roles={}; EV_ROLES.forEach(([k,l],i)=>{ roles[k]={name:l,uids:k==="lead"?[S.meId]:[],uid:k==="lead"?S.meId:"",at:i}; });
   const ck={}; DEFAULT_CHECK.forEach((t,i)=>{ ck["c"+i]={text:t,done:false,at:i}; });
   const run={}; tpl.run.forEach(([t,w],i)=>{ run["r"+i]={time:t,what:w,who:"",at:i}; });
   const budget={}; tpl.budget.forEach(([l,e],i)=>{ budget["b"+i]={label:l,est:e,actual:0,paid:false,by:"",at:i}; });
-  const data={title,template:tk,stage:"planning",date,time,endTime:"",location:loc,capacity:"",audience:"",link:"",description:"",lead:S.meId,team:[S.meId],roles,checklist:ck,run,budget,budgetTotal:tpl.budget.reduce((a,b)=>a+b[1],0),guests:{},review:{},itemId:"",createdBy:S.meId,createdAt:Date.now(),...stamp()};
+  const data={title,template:tk,stage:"planning",date,time,endTime:"",location:loc,capacity:"",audience:"",link:"",description:"",lead:S.meId,leads:[S.meId],team:[S.meId],roles,checklist:ck,run,budget,budgetTotal:tpl.budget.reduce((a,b)=>a+b[1],0),guests:{},review:{},itemId:"",createdBy:S.meId,createdAt:Date.now(),...stamp()};
   const id=await add("plans",data); if(!id) return;
-  for(const [off,sec,t] of tpl.tasks){ await add("tasks",{title:t,assignee:roleFor(data,sec)===S.meId&&SECTION_ROLE[sec]!=="lead"?"":roleFor(data,sec),due:date?shiftS(date,off):"",relDays:off,section:sec,done:false,notes:"",meetingId:"",occurrence:"",planId:id,createdBy:S.meId,createdAt:Date.now(),...stamp()}); }
+  for(const [off,sec,t] of tpl.tasks){ const who=SECTION_ROLE[sec]==="lead"?[S.meId]:[]; await add("tasks",{title:t,assignees:who,assignee:who[0]||"",due:date?shiftS(date,off):"",relDays:off,section:sec,done:false,notes:"",meetingId:"",occurrence:"",planId:id,createdBy:S.meId,createdAt:Date.now(),...stamp()}); }
   logAct("started planning",title); closeDrawer(); S.etab="overview"; location.hash="event-"+id; toast(tpl.tasks.length?`Event created with ${tpl.tasks.length} tasks. Assign roles next.`:"Event created.");
 }
 
@@ -674,7 +697,7 @@ function planCard(p){ const ts=A("tasks").filter(t=>t.planId===p.id); const dn=t
   return `<div class="card" data-plan="${esc(p.id)}" style="--tc:var(--m-plan)" role="button" tabindex="0"><div class="meta">${p.date?`<span class="chip ${d>=0&&d<=7?"soon":""}">🗓 ${esc(fmtDW(p.date))}${d>=0&&p.stage!=="done"?` · ${d===0?"today":"in "+d+"d"}`:""}</span>`:`<span class="chip">No date yet</span>`}${p.itemId?`<span class="chip ok">In newsletter</span>`:""}</div>
     <div class="t" dir="auto">${(TEMPLATES[p.template]||{}).icon||"🎪"} ${esc(p.title)}</div>${p.location?`<div class="meta" dir="auto">📍 ${esc(p.location)}</div>`:""}
     ${ts.length?`<div class="prog" title="${dn} of ${ts.length} tasks done"><span style="width:${Math.round(100*dn/ts.length)}%"></span></div><div class="meta">${dn}/${ts.length} tasks done</div>`:""}
-    <div class="foot"><div class="meta">${planTeam(p).slice(0,5).map(avImg).join("")}<span>${p.lead?esc(firstName(p.lead))+" leads":"No lead yet"}</span></div></div></div>`; }
+    <div class="foot"><div class="meta">${planTeam(p).slice(0,5).map(avImg).join("")}<span>${pLeads(p).length?esc(andList(pLeads(p).map(firstName)))+(pLeads(p).length>1?" lead":" leads"):"No lead yet"}</span></div></div></div>`; }
 function vEvents(){ const ps=A("plans");
   return `<h2>Event planner</h2><p class="sub">Events the branch organizes. Each event has its own page with tasks and a timeline, roles, budget, guests, run of show and a review afterwards.</p>
     ${S.canWrite?`<div class="toolbar"><button class="btn pri" data-act="new-plan">+ Plan a new event</button></div>`:""}
@@ -702,7 +725,7 @@ function vEvent(){
 function evOverview(p,ed,ts){ const dis=ed?"":"disabled"; const g=live(p.guests).map(([,v])=>v); const b=live(p.budget).map(([,v])=>v); const est=b.reduce((a,x)=>a+(+x.est||0),0); const ck=live(p.checklist); const ckd=ck.filter(([,c])=>c.done).length;
   const next=ts.filter(t=>!t.done).sort((a,b)=>(a.due||"9")<(b.due||"9")?-1:1).slice(0,6);
   return `<div class="tiles">
-      <a class="tile" href="#" data-etab="tasks"><span class="v">${ts.filter(t=>!t.done).length}</span><span class="l">open tasks${ts.filter(t=>!t.done&&!t.assignee).length?` · ${ts.filter(t=>!t.done&&!t.assignee).length} unassigned`:""}</span></a>
+      <a class="tile" href="#" data-etab="tasks"><span class="v">${ts.filter(t=>!t.done).length}</span><span class="l">open tasks${ts.filter(t=>!t.done&&!tAss(t).length).length?` · ${ts.filter(t=>!t.done&&!tAss(t).length).length} unassigned`:""}</span></a>
       <a class="tile" href="#" data-etab="team"><span class="v">${planTeam(p).length}</span><span class="l">people on the team</span></a>
       <a class="tile" href="#" data-etab="budget"><span class="v small">${money(est)}${p.budgetTotal?` / ${money(p.budgetTotal)}`:""}</span><span class="l">planned spend${p.budgetTotal&&est>p.budgetTotal?" · over budget":""}</span></a>
       <a class="tile" href="#" data-etab="guests"><span class="v">${g.filter(x=>x.status==="confirmed").length}/${g.length}</span><span class="l">guests confirmed</span></a></div>
@@ -727,23 +750,23 @@ function evTasks(p,ed,ts){
   const phase=t=>{ if(!t.due) return 0; if(!p.date) return 1; const r=Math.round((parseD(t.due)-parseD(p.date))/864e5); return r<=-28?1:r<=-14?2:r<=-7?3:r<0?4:r===0?5:6; };
   const PH=[[0,"No date yet"],[1,"4+ weeks before"],[2,"2–4 weeks before"],[3,"The week before"],[4,"Final days"],[5,"Event day"],[6,"After the event"]];
   const by=S.etf||"phase"; const sorted=ts.slice().sort((a,b)=>(a.due||"9999")<(b.due||"9999")?-1:(a.due||"9999")>(b.due||"9999")?1:0);
-  let groups; if(by==="phase") groups=PH.map(([k,l])=>[l,sorted.filter(t=>phase(t)===k)]); else if(by==="section") groups=EV_SECTIONS.map(s=>[s,sorted.filter(t=>(t.section||"General")===s)]); else groups=[...new Set(sorted.map(t=>t.assignee||""))].map(u=>[u?nameOf(u):"Unassigned",sorted.filter(t=>(t.assignee||"")===u)]);
+  let groups; if(by==="phase") groups=PH.map(([k,l])=>[l,sorted.filter(t=>phase(t)===k)]); else if(by==="section") groups=EV_SECTIONS.map(s=>[s,sorted.filter(t=>(t.section||"General")===s)]); else { const us=[...new Set(sorted.flatMap(t=>tAss(t).length?tAss(t):[""]))].sort((a,b)=>a===""?1:b===""?-1:nameOf(a).localeCompare(nameOf(b))); groups=us.map(u=>[u?nameOf(u):"Unassigned",sorted.filter(t=>u?tAss(t).includes(u):!tAss(t).length)]); }
   const needShift=p.date&&ts.some(t=>typeof t.relDays==="number"&&!t.done&&t.due!==shiftS(p.date,t.relDays));
   const secOpts=EV_SECTIONS.map(s=>`<option ${s==="General"?"selected":""}>${s}</option>`).join("");
   return `${needShift&&ed?`<div class="dup" style="margin-bottom:12px">The event date changed (or was just set). <button class="btn sm" data-act="ev-shift">Update task due dates to match</button></div>`:""}
-    ${S.canWrite?`<form class="panel taskAdd evtask" data-forplan="${esc(p.id)}" style="margin-bottom:14px"><input name="title" id="evTaskTitle" placeholder="Add a task for this event…" dir="auto" aria-label="Task"><select name="section" aria-label="Area" data-evsec>${secOpts}</select><select name="assignee" aria-label="Assign to">${peopleOpts(roleFor(p,"General"),"Unassigned")}</select><input name="due" type="date" aria-label="Due date"><button class="btn pri" type="submit">Add</button></form>`:""}
+    ${S.canWrite?`<form class="panel taskAdd evtask" data-forplan="${esc(p.id)}" style="margin-bottom:14px"><input name="title" id="evTaskTitle" placeholder="Add a task for this event…" dir="auto" aria-label="Task"><select name="section" aria-label="Area" data-evsec>${secOpts}</select><input name="due" type="date" aria-label="Due date"><button class="btn pri" type="submit">Add</button><div class="taskAddWho" style="flex-basis:100%"><span class="hint">Who:</span>${pick("ta-ev",roleFor(p,"General"),{name:"assignees",label:"Assign to"})}</div></form>`:""}
     <div class="seg" role="tablist" style="margin-bottom:12px">${[["phase","By timeline"],["section","By area"],["person","By person"]].map(([k,l])=>`<button role="tab" aria-selected="${by===k}" data-etf="${k}">${l}</button>`).join("")}</div>
     ${ts.length? groups.filter(([,g])=>g.length).map(([l,g])=>`<div class="panel" style="margin-bottom:12px"><div class="panel-h"><h3>${esc(l)}</h3><span class="hint">${g.filter(t=>t.done).length}/${g.length} done</span></div><div class="tasks">${g.map(t=>evTaskRow(t,p)).join("")}</div></div>`).join("")
       : `<div class="empty"><b>No tasks yet</b>Add tasks above, or apply a template.${ed?`<div class="toolbar" style="justify-content:center;margin:12px 0 0">${Object.entries(TEMPLATES).filter(([k])=>k!=="blank").map(([k,t])=>`<button class="btn sm" data-tplapply="${k}">${t.icon} ${esc(t.label)}</button>`).join("")}</div>`:""}</div>`}`; }
 function evTaskRow(t,p){ const rel=p.date&&t.due?Math.round((parseD(t.due)-parseD(p.date))/864e5):null;
   return `<div class="task ${t.done?"done":""}"><input type="checkbox" data-done="${esc(t.id)}" ${t.done?"checked":""} ${S.canWrite?"":"disabled"} aria-label="Done"><div class="grow"><a href="#" class="t" data-task="${esc(t.id)}" dir="auto">${esc(t.title)}</a>
-    <div class="meta">${t.assignee?`${avImg(t.assignee)}<span>${esc(firstName(t.assignee))}</span>`:`<span class="chip soon">Unassigned</span>`}${dueChip(t.due,t.done)}${rel!==null?`<span>${rel<0?`${-rel}d before`:rel===0?"event day":`${rel}d after`}</span>`:""}<span class="chip">${esc(t.section||"General")}</span></div></div></div>`; }
+    <div class="meta">${whoHtml(tAss(t),`<span class="chip soon">Unassigned</span>`)}${dueChip(t.due,t.done)}${rel!==null?`<span>${rel<0?`${-rel}d before`:rel===0?"event day":`${rel}d after`}</span>`:""}<span class="chip">${esc(t.section||"General")}</span></div></div></div>`; }
 function evTeam(p,ed){ const roles=live(p.roles).sort((a,b)=>(a[1].at??99)-(b[1].at??99)); const ts=A("tasks").filter(t=>t.planId===p.id);
-  return `<div class="panel" style="margin-bottom:16px"><div class="panel-h"><h3>Roles</h3><span class="hint">New tasks in an area go to that area's person automatically</span></div>
-    <div class="list">${roles.map(([k,r])=>`<div class="row"><div class="grow"><div class="t">${esc(r.name)}</div><div class="s">${r.uid?`${ts.filter(t=>t.assignee===r.uid&&!t.done).length} open tasks on this event`:"Nobody yet"}</div></div>
-      ${ed?`<select data-role="${esc(k)}" aria-label="Person for ${esc(r.name)}">${peopleOpts(r.uid,"Nobody yet")}</select>${k!=="lead"?`<button class="btn sm ghost danger" data-roledel="${esc(k)}" aria-label="Remove role">✕</button>`:""}`:(r.uid?`<span class="meta" style="display:flex;gap:6px;align-items:center">${avImg(r.uid)}${esc(nameOf(r.uid))}</span>`:"")}</div>`).join("")}</div>
-    ${ed?`<form id="roleForm" class="toolbar" style="margin:12px 0 0"><input id="roleName" placeholder="Add a role: Photographer, MC, Treasurer…" dir="auto" style="flex:1 1 220px"><select id="roleWho" aria-label="Person">${peopleOpts("","Nobody yet")}</select><button class="btn" type="submit">Add role</button></form>`:""}</div>
-    <div class="panel"><div class="panel-h"><h3>Workload</h3></div><div class="list">${planTeam(p).map(u=>{ const mine=ts.filter(t=>t.assignee===u); const open=mine.filter(t=>!t.done); const od=open.filter(t=>t.due&&daysTo(t.due)<0).length;
+  return `<div class="panel" style="margin-bottom:16px"><div class="panel-h"><h3>Roles</h3><span class="hint">Tap names to add or remove people. New tasks in an area go to that area's people automatically</span></div>
+    <div class="list">${roles.map(([k,r])=>`<div class="row"><div class="grow"><div class="t">${esc(r.name)}</div><div class="s">${rUids(r).length?`${esc(andList(rUids(r).map(firstName)))} · ${ts.filter(t=>!t.done&&tAss(t).some(u=>rUids(r).includes(u))).length} open tasks`:"Nobody yet. Tap names to add people"}</div></div>
+      ${ed?`${pick("role-"+k,rUids(r),{save:"role:"+k,label:"People for "+r.name})}${k!=="lead"?`<button class="btn sm ghost danger" data-roledel="${esc(k)}" aria-label="Remove role">✕</button>`:""}`:(rUids(r).length?`<span class="meta" style="display:flex;gap:6px;align-items:center">${whoHtml(rUids(r))}</span>`:"")}</div>`).join("")}</div>
+    ${ed?`<form id="roleForm" class="toolbar" style="margin:12px 0 0"><input id="roleName" placeholder="Add a role: Photographer, MC, Treasurer…" dir="auto" style="flex:1 1 220px"><button class="btn" type="submit">Add role</button><div class="taskAddWho" style="flex-basis:100%"><span class="hint">Who:</span>${pick("roleWho",[],{label:"People for the new role"})}</div></form>`:""}</div>
+    <div class="panel"><div class="panel-h"><h3>Workload</h3></div><div class="list">${planTeam(p).map(u=>{ const mine=ts.filter(t=>tAss(t).includes(u)); const open=mine.filter(t=>!t.done); const od=open.filter(t=>t.due&&daysTo(t.due)<0).length;
       return `<div class="row"><span class="meta" style="display:flex;gap:8px;align-items:center">${avImg(u)}<b>${esc(nameOf(u))}</b></span><span class="grow"></span><span class="chip">${open.length} open</span>${od?`<span class="chip hot">${od} overdue</span>`:""}<span class="chip ok">${mine.length-open.length} done</span></div>`; }).join("")||`<div class="colempty">Assign roles to build the team.</div>`}</div></div>`; }
 function evBudget(p,ed){ const b=live(p.budget).sort((a,c)=>(a[1].at||0)-(c[1].at||0)); const est=b.reduce((a,[,x])=>a+(+x.est||0),0), act=b.reduce((a,[,x])=>a+(+x.actual||0),0), total=+p.budgetTotal||0; const dis=ed?"":"disabled";
   return `<div class="tiles" style="grid-template-columns:repeat(3,minmax(0,1fr))"><div class="tile"><span class="v small">${money(total)}</span><span class="l">budget</span></div><div class="tile"><span class="v small" style="color:${total&&est>total?"var(--coral)":"inherit"}">${money(est)}</span><span class="l">planned${total?` · ${money(total-est)} left`:""}</span></div><div class="tile"><span class="v small">${money(act)}</span><span class="l">spent so far</span></div></div>
@@ -754,13 +777,13 @@ function evBudget(p,ed){ const b=live(p.budget).sort((a,c)=>(a[1].at||0)-(c[1].a
       </div>${ed?`<form id="budForm" class="toolbar" style="margin:12px 0 0"><input id="budLabel" placeholder="Add an item: Pizza, Printing, Speaker gift…" dir="auto" style="flex:1 1 220px"><input id="budEst" type="number" min="0" placeholder="₪ planned" style="width:120px"><button class="btn" type="submit">Add</button></form>`:""}</div>`; }
 function evGuests(p,ed){ const g=live(p.guests).sort((a,b)=>(a[1].at||0)-(b[1].at||0)); const dis=ed?"":"disabled";
   return `<div class="panel"><div class="panel-h"><h3>Speakers, sponsors and guests</h3><span class="hint">${g.filter(([,x])=>x.status==="confirmed").length} confirmed</span></div>
-    <div class="list">${g.map(([k,x])=>{ const c=x.contactId&&S.contacts.find(y=>y.id===x.contactId); return `<div class="row"><div class="grow"><div class="t" dir="auto">${esc(x.name)}${c?` <a href="#" data-contact="${esc(c.id)}" class="hint">contact card</a>`:""}</div><div class="s" dir="auto">${esc((GKINDS.find(q=>q[0]===x.kind)||["","Guest"])[1])}${x.owner?" · "+esc(firstName(x.owner))+" is in touch":""}${x.note?" · "+esc(x.note):""}</div></div>
-      <select data-guest="${esc(k)}" data-f="status" aria-label="Status" ${dis}>${GSTAT.map(([v,l])=>`<option value="${v}" ${x.status===v?"selected":""}>${l}</option>`).join("")}</select><select data-guest="${esc(k)}" data-f="owner" aria-label="Who's in touch" ${dis}>${peopleOpts(x.owner,"Nobody")}</select>${ed?`<button class="btn sm ghost danger" data-guestdel="${esc(k)}" aria-label="Remove">✕</button>`:""}</div>`; }).join("")||`<div class="colempty">Nobody added yet.</div>`}</div>
+    <div class="list">${g.map(([k,x])=>{ const c=x.contactId&&S.contacts.find(y=>y.id===x.contactId); return `<div class="row"><div class="grow"><div class="t" dir="auto">${esc(x.name)}${c?` <a href="#" data-contact="${esc(c.id)}" class="hint">contact card</a>`:""}</div><div class="s" dir="auto">${esc((GKINDS.find(q=>q[0]===x.kind)||["","Guest"])[1])}${gOwners(x).length?" · "+esc(andList(gOwners(x).map(firstName)))+" in touch":""}${x.note?" · "+esc(x.note):""}</div></div>
+      <select data-guest="${esc(k)}" data-f="status" aria-label="Status" ${dis}>${GSTAT.map(([v,l])=>`<option value="${v}" ${x.status===v?"selected":""}>${l}</option>`).join("")}</select>${pick("guest-"+k,gOwners(x),{save:"guest:"+k,dis:!ed,label:"Who's in touch"})}${ed?`<button class="btn sm ghost danger" data-guestdel="${esc(k)}" aria-label="Remove">✕</button>`:""}</div>`; }).join("")||`<div class="colempty">Nobody added yet.</div>`}</div>
     ${ed?`<form id="guestForm" class="toolbar" style="margin:12px 0 0"><select id="gContact" aria-label="From contacts"><option value="">New person…</option>${A("contacts").sort((a,b)=>(a.name||"").localeCompare(b.name||"")).map(c=>`<option value="${esc(c.id)}">${esc(c.name)}${c.org?" · "+esc(c.org):""}</option>`).join("")}</select><input id="gName" placeholder="Name" dir="auto" style="flex:1 1 160px"><select id="gKind" aria-label="Kind">${GKINDS.map(([v,l])=>`<option value="${v}">${l}</option>`).join("")}</select><input id="gNote" placeholder="Note (optional)" dir="auto" style="flex:1 1 160px"><button class="btn" type="submit">Add</button></form>`:""}</div>`; }
 function evRun(p,ed){ const r=live(p.run).sort((a,b)=>(a[1].time||"")<(b[1].time||"")?-1:(a[1].time||"")>(b[1].time||"")?1:(a[1].at||0)-(b[1].at||0)); const dis=ed?"":"disabled";
   return `<div class="panel"><div class="panel-h"><h3>Run of show${p.date?" · "+esc(fmtDW(p.date)):""}</h3><span class="hint">The minute-by-minute plan for the day</span></div>
-    <div class="list">${r.map(([k,x])=>`<div class="row"><input type="time" value="${esc(x.time||"")}" data-run="${esc(k)}" data-f="time" aria-label="Time" style="width:120px" ${dis}><div class="grow"><input value="${esc(x.what||"")}" data-run="${esc(k)}" data-f="what" dir="auto" aria-label="What happens" style="width:100%" ${dis}></div><select data-run="${esc(k)}" data-f="who" aria-label="Who" ${dis}>${peopleOpts(x.who,"Who?")}</select>${ed?`<button class="btn sm ghost danger" data-rundel="${esc(k)}" aria-label="Remove">✕</button>`:""}</div>`).join("")||`<div class="colempty">Nothing planned yet.</div>`}</div>
-    ${ed?`<form id="runForm" class="toolbar" style="margin:12px 0 0"><input id="runTime" type="time" aria-label="Time"><input id="runWhat" placeholder="What happens: Doors open, Opening words…" dir="auto" style="flex:1 1 220px"><select id="runWho" aria-label="Who">${peopleOpts("","Who?")}</select><button class="btn" type="submit">Add</button></form>`:""}</div>`; }
+    <div class="list">${r.map(([k,x])=>`<div class="row"><input type="time" value="${esc(x.time||"")}" data-run="${esc(k)}" data-f="time" aria-label="Time" style="width:120px" ${dis}><div class="grow"><input value="${esc(x.what||"")}" data-run="${esc(k)}" data-f="what" dir="auto" aria-label="What happens" style="width:100%" ${dis}></div>${pick("run-"+k,runWho(x),{save:"run:"+k,dis:!ed,label:"Who"})}${ed?`<button class="btn sm ghost danger" data-rundel="${esc(k)}" aria-label="Remove">✕</button>`:""}</div>`).join("")||`<div class="colempty">Nothing planned yet.</div>`}</div>
+    ${ed?`<form id="runForm" class="toolbar" style="margin:12px 0 0"><input id="runTime" type="time" aria-label="Time"><input id="runWhat" placeholder="What happens: Doors open, Opening words…" dir="auto" style="flex:1 1 220px"><button class="btn" type="submit">Add</button><div class="taskAddWho" style="flex-basis:100%"><span class="hint">Who:</span>${pick("runWho",[],{label:"Who"})}</div></form>`:""}</div>`; }
 function evAfter(p,ed){ const rv=p.review||{}; const dis=ed?"":"disabled";
   return `<form class="panel" id="reviewForm" novalidate><div class="panel-h"><h3>After the event</h3><span class="hint">Write it down while it's fresh, so the next event goes better</span></div><div style="display:flex;flex-direction:column;gap:12px">
     <div class="grid2"><label class="f">Registered<input id="rReg" type="number" min="0" value="${esc(rv.registered||"")}" ${dis}></label><label class="f">Actually came<input id="rAtt" type="number" min="0" value="${esc(rv.attendance||"")}" ${dis}></label><label class="f">Rating (1–5)<input id="rRate" type="number" min="1" max="5" value="${esc(rv.rating||"")}" ${dis}></label></div>
@@ -769,20 +792,30 @@ function evAfter(p,ed){ const rv=p.review||{}; const dis=ed?"":"disabled";
     <label class="f">Photos / slides link<input id="rPhotos" type="url" value="${esc(rv.photos||"")}" placeholder="https://…" ${dis}></label>
     ${ed?`<div class="toolbar" style="margin:0"><button class="btn pri" type="submit">Save review</button>${p.stage!=="done"?`<button type="button" class="btn" data-evstage="done">Mark the event as done</button>`:""}${S.canWrite?`<button type="button" class="btn" data-act="ev-dup">Plan it again (copy)</button>`:""}</div>`:""}</div></form>`; }
 
+async function savePick(box, spec, ids, prev){ const [kind,key]=spec.split(":"); let ok=false;
+  if(kind==="sec"){ await saveSettings({owners:{[key]:ids}}); ok=true; }
+  else { const p=S.plans.find(x=>x.id===S.eventId); if(!p) return;
+    if(kind==="role"){ const r=Object.assign({},(p.roles||{})[key],{uids:ids,uid:ids[0]||""}); const roles=Object.assign({},p.roles,{[key]:r}); const patch={roles:{[key]:{uids:ids,uid:ids[0]||""}},team:syncTeam(p,roles)}; if(key==="lead"){ patch.lead=ids[0]||""; patch.leads=ids; }
+      const added=ids.filter(u=>!prev.includes(u)); ok=await evUpdate(p,patch,added.length?`made ${andList(added.map(firstName))} ${r.name} for`:null);
+      if(ok&&ids.length){ const secs=Object.entries(SECTION_ROLE).filter(([,rk])=>rk===key).map(([sec])=>sec); const same=(a,b)=>a.length===b.length&&a.every(x=>b.includes(x)); const open=A("tasks").filter(t=>t.planId===p.id&&!t.done&&secs.includes(t.section||"General")&&(!tAss(t).length||(prev.length&&same(tAss(t),prev))));
+        for(const t of open) await upd("tasks",t.id,{assignees:ids,assignee:ids[0],...stamp()}); if(open.length) toast(`${plural(open.length,"task")} in ${secs.join(" / ")} now ${open.length===1?"goes":"go"} to ${andList(ids.map(firstName))}.`); } }
+    else if(kind==="guest") ok=await evUpdate(p,{guests:{[key]:{owners:ids,owner:ids[0]||""}}});
+    else if(kind==="run") ok=await evUpdate(p,{run:{[key]:{whos:ids,who:ids[0]||""}}}); }
+  if(ok&&box) delete box.dataset.dirty; }
 async function evUpdate(p, data, verb){ if(await upd("plans",p.id,{...data,...stamp()})){ if(verb) logAct(verb,p.title); return true; } return false; }
-function syncTeam(p, roles){ const s=new Set([p.createdBy].filter(Boolean)); Object.values(roles).forEach(r=>r&&r.uid&&s.add(r.uid)); return [...s]; }
-async function applyTemplate(p, tk){ const tpl=TEMPLATES[tk]; for(const [off,sec,t] of tpl.tasks){ await add("tasks",{title:t,assignee:roleFor(p,sec),due:p.date?shiftS(p.date,off):"",relDays:off,section:sec,done:false,notes:"",meetingId:"",occurrence:"",planId:p.id,createdBy:S.meId,createdAt:Date.now(),...stamp()}); }
+function syncTeam(p, roles){ const s=new Set([p.createdBy].filter(Boolean)); Object.values(roles).forEach(r=>rUids(r).forEach(u=>s.add(u))); return [...s]; }
+async function applyTemplate(p, tk){ const tpl=TEMPLATES[tk]; for(const [off,sec,t] of tpl.tasks){ const who=roleFor(p,sec); await add("tasks",{title:t,assignees:who,assignee:who[0]||"",due:p.date?shiftS(p.date,off):"",relDays:off,section:sec,done:false,notes:"",meetingId:"",occurrence:"",planId:p.id,createdBy:S.meId,createdAt:Date.now(),...stamp()}); }
   const patch={template:tk}; if(!live(p.run).length&&tpl.run.length){ patch.run={}; tpl.run.forEach(([t,w],i)=>patch.run["r"+i]={time:t,what:w,who:"",at:i}); } if(!live(p.budget).length&&tpl.budget.length){ patch.budget={}; tpl.budget.forEach(([l,e],i)=>patch.budget["b"+i]={label:l,est:e,actual:0,paid:false,by:"",at:i}); if(!p.budgetTotal) patch.budgetTotal=tpl.budget.reduce((a,b)=>a+b[1],0); }
   await evUpdate(p,patch,`applied the ${tpl.label.toLowerCase()} template to`); toast(`Added ${tpl.tasks.length} tasks.`); }
 async function duplicatePlan(p){ const ts=A("tasks").filter(t=>t.planId===p.id);
-  const copy={title:p.title+" (copy)",template:p.template||"blank",stage:"idea",date:"",time:p.time||"",endTime:p.endTime||"",location:p.location||"",capacity:p.capacity||"",audience:p.audience||"",link:"",description:p.description||"",lead:S.meId,team:[S.meId],roles:Object.fromEntries(live(p.roles).map(([k,r])=>[k,{...r,uid:k==="lead"?S.meId:""}])),
+  const copy={title:p.title+" (copy)",template:p.template||"blank",stage:"idea",date:"",time:p.time||"",endTime:p.endTime||"",location:p.location||"",capacity:p.capacity||"",audience:p.audience||"",link:"",description:p.description||"",lead:S.meId,leads:[S.meId],team:[S.meId],roles:Object.fromEntries(live(p.roles).map(([k,r])=>[k,{...r,uid:k==="lead"?S.meId:"",uids:k==="lead"?[S.meId]:[]}])),
     checklist:Object.fromEntries(live(p.checklist).map(([k,c])=>[k,{text:c.text,done:false,at:c.at||0}])),run:Object.fromEntries(live(p.run).map(([k,r])=>[k,{...r}])),budget:Object.fromEntries(live(p.budget).map(([k,b])=>[k,{label:b.label,est:b.est,actual:0,paid:false,by:"",at:b.at||0}])),budgetTotal:p.budgetTotal||0,guests:{},review:{},itemId:"",copiedFrom:p.id,createdBy:S.meId,createdAt:Date.now(),...stamp()};
-  const id=await add("plans",copy); if(!id) return; for(const t of ts){ await add("tasks",{title:t.title,assignee:"",due:"",relDays:typeof t.relDays==="number"?t.relDays:null,section:t.section||"General",done:false,notes:t.notes||"",meetingId:"",occurrence:"",planId:id,createdBy:S.meId,createdAt:Date.now(),...stamp()}); }
+  const id=await add("plans",copy); if(!id) return; for(const t of ts){ await add("tasks",{title:t.title,assignee:"",assignees:[],due:"",relDays:typeof t.relDays==="number"?t.relDays:null,section:t.section||"General",done:false,notes:t.notes||"",meetingId:"",occurrence:"",planId:id,createdBy:S.meId,createdAt:Date.now(),...stamp()}); }
   logAct("copied an event:",p.title); await whenExists("plans",id); S.etab="overview"; location.hash="event-"+id; toast("Copied with its tasks, run of show and budget. Set a date and assign people."); }
 
 // contact
 function openContact(id){ const c=id? S.contacts.find(x=>x.id===id) : null; if(id&&!c) return;
-  openD("contact",{id:id||null,base:c?(c.updatedAt||0):0,draft:Object.assign({name:"",org:"",role:"",kind:"speaker",email:"",phone:"",owner:S.meId,lastContact:"",notes:""},c?JSON.parse(JSON.stringify(c)):{})}); }
+  openD("contact",{id:id||null,base:c?(c.updatedAt||0):0,draft:Object.assign({name:"",org:"",role:"",kind:"speaker",email:"",phone:"",owner:S.meId,owners:[S.meId],lastContact:"",notes:""},c?JSON.parse(JSON.stringify(c)):{})}); }
 function drawContact(key, live){
   const D=S.drawer, d=D.draft, c=D.id?S.contacts.find(x=>x.id===D.id):null; if(live){ const s=$("#staleBox"); if(s) s.innerHTML=staleHtml(c); return; }
   const ro=!canEditContact(c), dis=ro?"disabled":"";
@@ -791,7 +824,7 @@ function drawContact(key, live){
     <form class="box" id="contactForm" novalidate>
       <label class="f"><span class="lh">Name<span class="req">*</span></span><input id="oName" dir="auto" value="${esc(d.name)}" ${dis} data-autofocus></label>
       <div class="grid2"><label class="f">Organization<input id="oOrg" dir="auto" value="${esc(d.org)}" placeholder="Company, lab, NGO" ${dis}></label><label class="f">Role<input id="oRole" dir="auto" value="${esc(d.role)}" placeholder="CEO · PI · Program manager" ${dis}></label>
-        <label class="f">Kind<select id="oKind" ${dis}>${CKINDS.map(([k,l])=>`<option value="${k}" ${d.kind===k?"selected":""}>${l}</option>`).join("")}</select></label><label class="f">Our contact person<select id="oOwner" ${dis}>${peopleOpts(d.owner,"Nobody yet")}</select></label>
+        <label class="f">Kind<select id="oKind" ${dis}>${CKINDS.map(([k,l])=>`<option value="${k}" ${d.kind===k?"selected":""}>${l}</option>`).join("")}</select></label><div class="f" style="display:flex;flex-direction:column;gap:6px;font-size:12.5px;color:var(--muted);font-weight:500;grid-column:1/-1">Who on our team is in touch${pick("oOwners",cOwners(d),{dis:ro,label:"Our contact people"})}</div>
         <label class="f">Email<input id="oEmail" type="email" value="${esc(d.email)}" ${dis}></label><label class="f">Phone<input id="oPhone" type="tel" value="${esc(d.phone)}" ${dis}></label>
         <label class="f">Last contact<input id="oLast" type="date" value="${esc(d.lastContact)}" ${dis}></label></div>
       <label class="f">Notes<textarea id="oNotes" rows="4" dir="auto" placeholder="How we know them, what we talked about, what they could help with" ${dis}>${esc(d.notes)}</textarea></label>
@@ -800,7 +833,7 @@ function drawContact(key, live){
       ${ro?"":delBlock("Move this contact to the Trash?")}</form>`);
 }
 async function submitContact(today){ const D=S.drawer; const name=$("#oName").value.trim(); if(!name){ $("#oErr").innerHTML=`<div class="dup">Add a name first.</div>`; return; }
-  const data={name,org:$("#oOrg").value.trim(),role:$("#oRole").value.trim(),kind:$("#oKind").value,owner:$("#oOwner").value,email:$("#oEmail").value.trim(),phone:$("#oPhone").value.trim(),lastContact:today?todayS():$("#oLast").value,notes:$("#oNotes").value.trim(),...stamp()};
+  const data={name,org:$("#oOrg").value.trim(),role:$("#oRole").value.trim(),kind:$("#oKind").value,owners:pickVal(document.querySelector('.ppick[data-pp="oOwners"]')),owner:pickVal(document.querySelector('.ppick[data-pp="oOwners"]'))[0]||"",email:$("#oEmail").value.trim(),phone:$("#oPhone").value.trim(),lastContact:today?todayS():$("#oLast").value,notes:$("#oNotes").value.trim(),...stamp()};
   if(D.id){ if(await upd("contacts",D.id,data)){ if(today) logAct("talked to",name); closeDrawer(); toast("Saved."); } }
   else { const id=await add("contacts",Object.assign(data,{createdBy:S.meId,createdAt:Date.now()})); if(id){ logAct("added a contact:",name); closeDrawer(); toast("Contact added."); } }
 }
@@ -823,7 +856,7 @@ async function sendIssue(){
     await S.db.collection("issues").doc("issue-"+n).set({number:n,text,itemIds:its.map(i=>i.id),intro:st.draftIntro||"",sentAt,sentBy:S.meId});
     try{ await S.db.collection("published").doc("issue-"+n).set({number:n,text,sentAt,name:st.name,events:its.filter(i=>i.date).map(i=>({title:i.title,date:i.date,location:i.location||"",url:i.url||"",summary:i.summary||"",type:i.type}))}); }catch{}
     for(const i of its){ await S.db.collection("items").doc(i.id).update({status:"archived",issueNo:n,order:null,...stamp()});
-      if(i.recurring&&i.recurring!=="none"){ const c=JSON.parse(JSON.stringify(i)); delete c.id; Object.assign(c,{status:"found",issueNo:null,votes:{},comments:{},owner:null,order:null,date:shiftDate(i.date,i.recurring),deadline:shiftDate(i.deadline,i.recurring),createdAt:Date.now(),...stamp(),addedBy:S.meId,tags:[...new Set([...(i.tags||[]),"recurring"])]}); await S.db.collection("items").add(c); } }
+      if(i.recurring&&i.recurring!=="none"){ const c=JSON.parse(JSON.stringify(i)); delete c.id; Object.assign(c,{status:"found",issueNo:null,votes:{},comments:{},owner:null,owners:[],order:null,date:shiftDate(i.date,i.recurring),deadline:shiftDate(i.deadline,i.recurring),createdAt:Date.now(),...stamp(),addedBy:S.meId,tags:[...new Set([...(i.tags||[]),"recurring"])]}); await S.db.collection("items").add(c); } }
     await saveSettings({nextIssue:n+1,draftIntro:""}); logAct("sent issue",`#${n} (${plural(its.length,"item")})`,null); toast(`Issue #${n} archived and published. On to #${n+1}.`);
   }catch(e){ writeErr(e); }
 }
@@ -846,9 +879,10 @@ async function importBackup(file){ let data; try{ data=JSON.parse(await file.tex
 
 // ───────── events ─────────
 document.addEventListener("click", async e=>{
-  const t=e.target.closest("[data-act],[data-open],[data-meet],[data-plan],[data-task],[data-contact],[data-vote],[data-next],[data-pnext],[data-check],[data-delsrc],[data-move],[data-copyissue],[data-cal],[data-day],[data-done],[data-tf],[data-rsvp],[data-pstage],[data-ck],[data-ckdel],[data-mention],[data-restore],[data-purge],[data-sugg-ok],[data-sugg-no],[data-unskip],[data-etab],[data-etf],[data-evstage],[data-tplapply],[data-roledel],[data-buddel],[data-guestdel],[data-rundel]");
+  const t=e.target.closest("[data-act],[data-open],[data-meet],[data-plan],[data-task],[data-contact],[data-vote],[data-next],[data-pnext],[data-check],[data-delsrc],[data-move],[data-copyissue],[data-cal],[data-day],[data-done],[data-tf],[data-rsvp],[data-pstage],[data-ck],[data-ckdel],[data-mention],[data-restore],[data-purge],[data-sugg-ok],[data-sugg-no],[data-unskip],[data-ppid],[data-etab],[data-etf],[data-evstage],[data-tplapply],[data-roledel],[data-buddel],[data-guestdel],[data-rundel]");
   if(!t){ if(e.target.classList.contains("scrim")) closeDrawer(); return; }
   const ds=t.dataset;
+  if(ds.ppid){ const box=t.closest(".ppick"); const cur=pickVal(box); const next=cur.includes(ds.ppid)?cur.filter(x=>x!==ds.ppid):[...cur,ds.ppid]; pickSet(box,next); box.dataset.dirty="1"; if(box.dataset.ppsave) savePick(box,box.dataset.ppsave,next,cur); return; }
   if(ds.done!==undefined&&t.tagName==="INPUT"){ toggleTask(ds.done); return; }
   if(ds.done!==undefined){ await toggleTask(ds.done); closeDrawer(); return; }
   if(ds.next){ const it=S.items.find(i=>i.id===ds.next); const ns=it&&nextStage(it.status); if(ns){ await moveStage(it.id,ns); toast(`Moved to ${STAGE[ns]}.`); } return; }
@@ -895,7 +929,8 @@ document.addEventListener("click", async e=>{
   else if(a==="mine"){ S.f.who = S.f.who===S.meId? "" : S.meId; render(); }
   else if(a==="ics") icsExport();
   else if(a==="reload"){ const fn={item:openItem,meeting:openMeeting,task:openTask,plan:openPlan,contact:openContact}[D.kind]; fn(D.id); }
-  else if(a==="claim"||a==="unclaim"){ const it=S.items.find(i=>i.id===D.id); readItemForm(); if(await upd("items",D.id,{owner:a==="claim"?S.meId:null})){ if(a==="claim"){ logAct("is writing",it.title,D.id); if((it.status||"found")!=="issue"&&it.status!=="archived"&&await upd("items",D.id,{status:"writing",...stamp()})) D.draft.status="writing"; } D.draft.owner=a==="claim"?S.meId:null; D.base=null; bump(); } }
+  else if(a==="claim"||a==="unclaim"){ const it=S.items.find(i=>i.id===D.id); readItemForm(); const cur=iOwners(it); const next=a==="claim"?[...new Set([...cur,S.meId])]:cur.filter(u=>u!==S.meId);
+    if(await upd("items",D.id,{owners:next,owner:next[0]||null})){ if(a==="claim"){ logAct("is writing",it.title,D.id); if((it.status||"found")!=="issue"&&it.status!=="archived"&&await upd("items",D.id,{status:"writing",...stamp()})) D.draft.status="writing"; } D.draft.owners=next; D.base=null; bump(); } }
   else if(a==="del"){ S.drawer.confirmDel=true; bump(); }
   else if(a==="del-no"){ S.drawer.confirmDel=false; bump(); }
   else if(a==="del-yes"){ trash({item:"items",meeting:"meetings",task:"tasks",plan:"plans",contact:"contacts"}[D.kind], D.id); }
@@ -931,13 +966,13 @@ document.addEventListener("submit", async e=>{
   if(id==="itemForm") submitItem(); else if(id==="meetForm") submitMeeting(); else if(id==="occForm") submitOcc(); else if(id==="taskForm") submitTask(); else if(id==="planForm") submitPlan(); else if(id==="contactForm") submitContact(false);
   else if(id==="evDetails"){ const p=S.plans.find(x=>x.id===S.eventId); const v=x=>$("#"+x).value.trim(); const data={title:v("eTitle")||p.title,date:$("#eDate").value,time:$("#eTime").value,endTime:$("#eEnd").value,location:v("eLoc"),capacity:v("eCap"),audience:v("eAud"),link:v("eLink"),description:v("eDesc")};
     if(await evUpdate(p,data,p.date!==data.date?"moved the date of":"updated")){ f.querySelectorAll("input,textarea").forEach(el=>el.defaultValue=el.value); toast(p.date!==data.date&&A("tasks").some(t=>t.planId===p.id&&typeof t.relDays==="number")?"Saved. Check the Tasks tab to update due dates.":"Saved."); } }
-  else if(id==="roleForm"){ const p=S.plans.find(x=>x.id===S.eventId); const name=$("#roleName").value.trim(); if(!name) return; const k=nid("role"); const r={name,uid:$("#roleWho").value,at:Date.now()}; const roles=Object.assign({},p.roles,{[k]:r});
-    if(await evUpdate(p,{roles:{[k]:r},team:syncTeam(p,roles)})){ f.reset(); toast(`Added ${name}.`); } }
+  else if(id==="roleForm"){ const p=S.plans.find(x=>x.id===S.eventId); const name=$("#roleName").value.trim(); if(!name) return; const k=nid("role"); const who=pickVal(document.querySelector('.ppick[data-pp="roleWho"]')); const r={name,uids:who,uid:who[0]||"",at:Date.now()}; const roles=Object.assign({},p.roles,{[k]:r});
+    if(await evUpdate(p,{roles:{[k]:r},team:syncTeam(p,roles)})){ f.reset(); const b=f.querySelector(".ppick"); pickSet(b,[]); if(b) delete b.dataset.dirty; toast(`Added ${name}.`); } }
   else if(id==="budForm"){ const p=S.plans.find(x=>x.id===S.eventId); const label=$("#budLabel").value.trim(); if(!label) return; if(await evUpdate(p,{budget:{[nid("b")]:{label,est:Number($("#budEst").value)||0,actual:0,paid:false,by:"",at:Date.now()}}})) f.reset(); }
   else if(id==="btForm"){ const p=S.plans.find(x=>x.id===S.eventId); if(await evUpdate(p,{budgetTotal:Number($("#bTotal").value)||0})){ $("#bTotal").defaultValue=$("#bTotal").value; toast("Budget set."); } }
   else if(id==="guestForm"){ const p=S.plans.find(x=>x.id===S.eventId); const cid=$("#gContact").value; const c=cid&&S.contacts.find(x=>x.id===cid); const name=$("#gName").value.trim()||(c&&c.name)||""; if(!name){ toast("Add a name or pick a contact."); return; }
-    if(await evUpdate(p,{guests:{[nid("g")]:{name,kind:$("#gKind").value,status:"idea",owner:(c&&c.owner)||"",contactId:cid||"",note:$("#gNote").value.trim(),at:Date.now()}}})){ f.reset(); f.querySelectorAll("select").forEach(x=>delete x.dataset.dirty); } }
-  else if(id==="runForm"){ const p=S.plans.find(x=>x.id===S.eventId); const what=$("#runWhat").value.trim(); if(!what) return; if(await evUpdate(p,{run:{[nid("r")]:{time:$("#runTime").value,what,who:$("#runWho").value,at:Date.now()}}})){ f.reset(); } }
+    if(await evUpdate(p,{guests:{[nid("g")]:{name,kind:$("#gKind").value,status:"idea",owners:c?cOwners(c):[],owner:(c&&cOwners(c)[0])||"",contactId:cid||"",note:$("#gNote").value.trim(),at:Date.now()}}})){ f.reset(); f.querySelectorAll("select").forEach(x=>delete x.dataset.dirty); } }
+  else if(id==="runForm"){ const p=S.plans.find(x=>x.id===S.eventId); const what=$("#runWhat").value.trim(); if(!what) return; if(await evUpdate(p,{run:{[nid("r")]:{time:$("#runTime").value,what,whos:pickVal(f.querySelector(".ppick")),who:pickVal(f.querySelector(".ppick"))[0]||"",at:Date.now()}}})){ f.reset(); const b=f.querySelector(".ppick"); pickSet(b,[]); if(b) delete b.dataset.dirty; } }
   else if(id==="reviewForm"){ const p=S.plans.find(x=>x.id===S.eventId); const review={registered:$("#rReg").value,attendance:$("#rAtt").value,rating:$("#rRate").value,wentWell:$("#rWell").value.trim(),improve:$("#rImprove").value.trim(),photos:$("#rPhotos").value.trim()};
     if(await evUpdate(p,{review},"wrote the review for")){ f.querySelectorAll("input,textarea").forEach(el=>el.defaultValue=el.value); toast("Review saved."); } }
   else if(id==="quickForm"){ const u=$("#quickUrl").value.trim(); if(!u) return; $("#quickUrl").value=""; openItem(null,{url:/^https?:\/\//i.test(u)?u:"https://"+u}); }
@@ -962,14 +997,10 @@ document.addEventListener("change", e=>{
   const id=e.target.id, ds=e.target.dataset; if(e.target.tagName==="SELECT") e.target.dataset.dirty="1";
   if(id==="ftype"){S.f.type=e.target.value;render();} else if(id==="fwho"){S.f.who=e.target.value;render();} else if(id==="ftag"){S.f.tag=e.target.value;render();} else if(id==="ckind"){S.cf.kind=e.target.value;render();}
   else if(id==="intro"){ saveSettings({draftIntro:e.target.value}); }
-  else if(ds.role!==undefined&&S.view==="event"){ const p=S.plans.find(x=>x.id===S.eventId); const r=Object.assign({},(p.roles||{})[ds.role],{uid:e.target.value}); const roles=Object.assign({},p.roles,{[ds.role]:r});
-    const patch={roles:{[ds.role]:{uid:e.target.value}},team:syncTeam(p,roles)}; if(ds.role==="lead") patch.lead=e.target.value; const who=e.target.value; evUpdate(p,patch,who?`made ${firstName(who)} ${r.name} for`:null).then(async ok=>{ delete e.target.dataset.dirty; if(!ok||!who) return;
-      const secs=Object.entries(SECTION_ROLE).filter(([,rk])=>rk===ds.role).map(([sec])=>sec); const open=A("tasks").filter(t=>t.planId===p.id&&!t.done&&!t.assignee&&secs.includes(t.section||"General"));
-      for(const t of open) await upd("tasks",t.id,{assignee:who,...stamp()}); if(open.length) toast(`${firstName(who)} also got the ${plural(open.length,"unassigned task")} in ${secs.join(" / ")}.`); }); }
   else if(ds.bud){ const v=e.target.type==="checkbox"?e.target.checked:e.target.tagName==="SELECT"?e.target.value:(Number(e.target.value)||0); evUpdate(S.plans.find(x=>x.id===S.eventId),{budget:{[ds.bud]:{[ds.f]:v}}}).then(()=>{ e.target.defaultValue=e.target.value; delete e.target.dataset.dirty; if(e.target.type==="checkbox") e.target.defaultChecked=e.target.checked; }); }
   else if(ds.guest){ evUpdate(S.plans.find(x=>x.id===S.eventId),{guests:{[ds.guest]:{[ds.f]:e.target.value}}}).then(()=>delete e.target.dataset.dirty); }
   else if(ds.run){ evUpdate(S.plans.find(x=>x.id===S.eventId),{run:{[ds.run]:{[ds.f]:e.target.value}}}).then(()=>{ e.target.defaultValue=e.target.value; delete e.target.dataset.dirty; }); }
-  else if(ds.evsec!==undefined){ const p=S.plans.find(x=>x.id===S.eventId); const a=e.target.form.querySelector("[name=assignee]"); if(a){ a.value=roleFor(p,e.target.value); a.dataset.dirty="1"; } }
+  else if(ds.evsec!==undefined){ const p=S.plans.find(x=>x.id===S.eventId); const b=e.target.form.querySelector(".ppick"); if(b){ pickSet(b,roleFor(p,e.target.value)); b.dataset.dirty="1"; } }
   else if(id==="gContact"){ const c=S.contacts.find(x=>x.id===e.target.value); if(c){ $("#gName").value=c.name; const k={speaker:"speaker",sponsor:"sponsor",partner:"partner"}[c.kind]; if(k) $("#gKind").value=k; } }
   else if(id==="mRepeat"){ const w=$("#mUntilWrap"); if(w) w.hidden=e.target.value==="none"; }
   else if(id==="dUrl"){ const u=e.target.value.trim(); if(u&&S.drawer&&!S.drawer.id){ readItemForm(); if(!S.drawer.draft.title) fetchMeta(u); } }
@@ -977,7 +1008,6 @@ document.addEventListener("change", e=>{
   else if(id==="dStatus"&&ds.quickstage&&S.drawer){ const st=e.target.value; moveStage(S.drawer.id,st).then(()=>{ if(S.drawer){ S.drawer.draft.status=st; toast(`Moved to ${STAGE[st]}.`);} }); }
   else if(id==="restoreFile"&&e.target.files[0]){ $("#restoreConfirm").innerHTML=`<div class="confirm">Restore “${esc(e.target.files[0].name)}”? Records in the file overwrite the current versions with the same ID; nothing else is deleted. <button class="btn sm danger" data-act="restore-yes">Restore</button><button class="btn sm" data-act="restore-no">Cancel</button></div>`; }
   else if(ds.access){ changeRole(ds.access, e.target.value); }
-  else if(ds.owner){ const owners=Object.assign({},settings().owners,{[ds.owner]:e.target.value||null}); saveSettings({owners}); }
 });
 let dragId=null;
 document.addEventListener("dragstart", e=>{ const c=e.target.closest&&e.target.closest(".card[draggable=true]"); if(!c) return; dragId=c.dataset.id; e.dataTransfer.effectAllowed="move"; try{e.dataTransfer.setData("text/plain",dragId);}catch{} });

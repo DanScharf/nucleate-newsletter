@@ -264,8 +264,20 @@ details.more[open] summary{margin-bottom:12px}
 .task.done .t{color:var(--muted);text-decoration:line-through}
 .task .meta{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:12px;color:var(--muted);margin-top:2px}
 .task .meta .av{width:18px;height:18px}
-.taskAdd{display:flex;gap:8px;flex-wrap:wrap}
+.taskAdd{display:flex;flex-direction:column;gap:8px}
+.taskAddRow{display:flex;gap:8px;flex-wrap:wrap}
 .taskAdd input[name=title]{flex:1 1 200px}
+.taskAdd.evtask{flex-direction:row;flex-wrap:wrap}
+.taskAddWho{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+/* multi-person picker */
+.ppick{display:flex;flex-wrap:wrap;gap:4px;align-items:center}
+.pp{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line);background:var(--surface);color:var(--muted);border-radius:999px;padding:3px 10px 3px 4px;cursor:pointer;font-size:12.5px;font-weight:500}
+.pp .av{width:20px;height:20px}
+.pp:hover{border-color:var(--muted)}
+.pp[aria-pressed=true]{background:var(--accent-soft);border-color:var(--accent);color:var(--ink)}
+.pp[aria-pressed=true]::after{content:"✓";color:var(--accent);font-weight:700;margin-left:1px}
+.pp[disabled]{cursor:default;opacity:.75}
+.pp[disabled][aria-pressed=false]{display:none}
 .seg{display:inline-flex;flex-wrap:wrap;gap:4px;background:var(--sunk);border-radius:10px;padding:3px;margin-bottom:14px}
 .seg button{border:0;background:transparent;padding:6px 12px;border-radius:8px;cursor:pointer;font-weight:500;color:var(--muted)}
 .seg button[aria-selected=true],.seg button[aria-pressed=true]{background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
