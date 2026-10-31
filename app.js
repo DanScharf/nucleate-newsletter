@@ -120,7 +120,7 @@ async function purgeOld(){ if(S.purged||!isAdmin()) return; S.purged=true; const
 
 const whenExists = (col,id) => new Promise(res=>{ let n=0; const tick=()=>{ if(S[col].some(x=>x.id===id)||++n>40) return res(); setTimeout(tick,50); }; tick(); });
 // ───────── render loop ─────────
-window.__APP_BUILD="202611011300";
+window.__APP_BUILD="202611011500";
 let raf=0, renderFails=0; function render(){ cancelAnimationFrame(raf); raf=requestAnimationFrame(()=>{ try{ doRender(); renderFails=0; }catch(err){ console.error(err); if(++renderFails<3) return; const m=$("#main"); if(m) m.innerHTML=`<div class="empty"><b>Something went wrong showing this page</b>Try a hard refresh (Cmd+Shift+R on Mac, Ctrl+Shift+R on Windows). If it keeps happening, send a screenshot of this message to Dan.<br><br><code style="font-size:12px">${esc(String(err&&err.message||err))}</code><br><br><button class="btn pri" onclick="location.reload()">Reload</button></div>`; } }); }
 const NAV=[["home","Home",[]],["news","Newsletter",[["board","Pipeline"],["issue","This issue"],["sources","Sources"],["inbox","Suggestions"],["archive","Archive"]]],["events","Events",[["events","Event planner"],["calendar","Calendar"]]],["team","Team",[["tasks","Tasks"],["contacts","Contacts"],["team","People & access"]]]];
 const sectionOf = v => v==="home"?"home":["board","issue","sources","inbox","archive","places"].includes(v)?"news":["events","event","calendar"].includes(v)?"events":["tasks","contacts","team"].includes(v)?"team":"";
@@ -726,9 +726,12 @@ const DFORMATS = {story:{label:"Instagram story",w:1080,h:1920},post:{label:"Squ
 const DSTYLES = {
   helix:{label:"Navy",bg:"#10223B",bg2:"#16304F",ink:"#F2F7FB",muted:"#A8BCD0",accent:"#36C3B0",accent2:"#F2735E",rung:"#4E6785",card:"rgba(255,255,255,.07)"},
   light:{label:"Lab white",bg:"#F4F7FA",bg2:"#E6EDF3",ink:"#0F1D2E",muted:"#52657A",accent:"#0C8C7E",accent2:"#D9503B",rung:"#B7C6D4",card:"rgba(15,29,46,.05)"},
-  coral:{label:"Coral",bg:"#D9503B",bg2:"#C2412E",ink:"#FFF7F2",muted:"#FFD9CF",accent:"#10223B",accent2:"#FFE3A3",rung:"#F08A75",card:"rgba(16,34,59,.14)"}
+  coral:{label:"Coral",bg:"#D9503B",bg2:"#C2412E",ink:"#FFF7F2",muted:"#FFD9CF",accent:"#10223B",accent2:"#FFE3A3",rung:"#F08A75",card:"rgba(16,34,59,.14)"},
+  mint:{label:"Mint",bg:"#E6F4EE",bg2:"#D3ECE2",ink:"#16352E",muted:"#4E6E64",accent:"#3E9C84",accent2:"#E6957F",time:"#B4553F",rung:"#A9D3C3",card:"rgba(22,53,46,.06)"},
+  lavender:{label:"Lavender",bg:"#EEEBF8",bg2:"#E0DAF2",ink:"#272245",muted:"#615B80",accent:"#7C6CC4",accent2:"#E59AB4",time:"#A8487A",rung:"#C6BDE6",card:"rgba(39,34,69,.06)"},
+  peach:{label:"Peach",bg:"#FDF0E7",bg2:"#F9E1D3",ink:"#3D2A22",muted:"#7C6157",accent:"#C46A50",accent2:"#6FA8A0",time:"#3E7D75",rung:"#EFC6B3",card:"rgba(61,42,34,.06)"}
 };
-const DMOTIFS = {helix:"DNA helix",molecule:"Molecule",cells:"Cells",pulse:"Heartbeat"};
+const DMOTIFS = {helix:"DNA helix",molecule:"Molecule",cells:"Cells",neurons:"Neurons",bacteria:"Bacteria",petri:"Petri dish",chromosomes:"Chromosomes"};
 const fmtLong = s => { const d=parseD(s); return d? d.toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long"}) : ""; };
 function evGuestsConfirmed(p){ return live(p.guests).map(([,g])=>g).filter(g=>g.status==="confirmed"&&["speaker","panelist","moderator"].includes(g.kind)); }
 const runCmp=(a,b)=>{ const x=a.time||"99:99", y=b.time||"99:99"; return x<y?-1:x>y?1:(a.at||0)-(b.at||0); };
@@ -750,7 +753,7 @@ function designState(p){ const sp=evGuestsConfirmed(p).map(g=>g.name);
   const def={format:"story",style:"helix",kicker:"NUCLEATE TECHNION PRESENTS",title:p.title||"",subtitle:(p.description||"").split(/\n|\. /)[0].slice(0,120),
     when:evWhen(p),where:p.location||"",speakers:sp.join(" · "),cta:p.link?"Register via the link / QR":"Free entry · All students welcome",
     showRun:true,showQR:!!p.link,footer:"Nucleate – Technion Branch",motif:"helix"};
-  S.dz=S.dz||{}; if(!S.dz[p.id]) S.dz[p.id]=Object.assign(def,p.design||{}); return S.dz[p.id]; }
+  S.dz=S.dz||{}; if(!S.dz[p.id]){ S.dz[p.id]=Object.assign(def,p.design||{}); if(!DMOTIFS[S.dz[p.id].motif]) S.dz[p.id].motif="helix"; if(!DSTYLES[S.dz[p.id].style]) S.dz[p.id].style="helix"; } return S.dz[p.id]; }
 function evDesign(p,ed){ const z=designState(p); const wa=itinerary(p,"wa"), plain=itinerary(p,"plain");
   const fld=(k,l,ph,ta)=>`<label class="f">${l}${ta?`<textarea data-dz="${k}" rows="2" dir="auto" placeholder="${esc(ph||"")}">${esc(z[k]||"")}</textarea>`:`<input data-dz="${k}" dir="auto" value="${esc(z[k]||"")}" placeholder="${esc(ph||"")}">`}</label>`;
   return `<div class="design-grid">
@@ -809,15 +812,33 @@ function drawMotif(g, kind, W, H, T, st, sq){ const cy=H*T.helixY, amp=T.amp;
       g.globalAlpha=.9; g.fillStyle=col; g.beginPath(); g.arc(x+rr*.18*(q-.5)*2,y-rr*.12,rr*.32,0,Math.PI*2); g.fill();
       g.globalAlpha=.5; g.fillStyle=st.ink; for(let k=0;k<3;k++){ const a=q*9+k*2.1; g.beginPath(); g.arc(x+Math.cos(a)*rr*.62,y+Math.sin(a)*rr*.62,sq?3:4,0,Math.PI*2); g.fill(); } });
     g.globalAlpha=1; return; }
-  if(kind==="pulse"){ const gap=sq?36:44; g.fillStyle=st.rung; g.globalAlpha=.45;
-    for(let yy=gap/2; yy<cy+amp*1.4; yy+=gap) for(let xx=gap/2; xx<W; xx+=gap){ g.beginPath(); g.arc(xx,yy,sq?2.2:3,0,Math.PI*2); g.fill(); }
-    const beat=W*(sq?.42:.36); const pts=[]; for(let x=-20;x<=W+20;x+=3){ const u=((x%beat)+beat)%beat/beat; let v=0;
-      if(u>.12&&u<.22) v=-.22*Math.sin((u-.12)/.10*Math.PI); else if(u>.30&&u<.33) v=.25*(u-.30)/.03; else if(u>=.33&&u<.37) v=.25-1.45*(u-.33)/.04; else if(u>=.37&&u<.41) v=-1.2+1.5*(u-.37)/.04; else if(u>=.41&&u<.43) v=.3-.3*(u-.41)/.02; else if(u>.55&&u<.72) v=-.32*Math.sin((u-.55)/.17*Math.PI);
-      pts.push([x, cy+v*amp]); }
-    const path=()=>{ g.beginPath(); pts.forEach(([x,y],i)=>i?g.lineTo(x,y):g.moveTo(x,y)); };
-    g.lineJoin="round"; g.lineCap="round"; g.strokeStyle=st.accent; g.globalAlpha=.22; g.lineWidth=sq?22:30; path(); g.stroke();
-    g.globalAlpha=1; g.lineWidth=sq?7:10; path(); g.stroke();
-    const end=pts[Math.floor(pts.length*.82)]; g.fillStyle=st.accent2; g.beginPath(); g.arc(end[0],end[1],sq?14:20,0,Math.PI*2); g.fill(); g.globalAlpha=.3; g.beginPath(); g.arc(end[0],end[1],sq?28:40,0,Math.PI*2); g.fill(); g.globalAlpha=1; return; }
+  const band=H*T.start-(sq?70:95);                                        // shapes stay above the title area
+  if(kind==="neurons"){ const R=rng(23); const nodes=[]; const cols=sq?7:8, rows=3;
+    for(let r=0;r<rows;r++) for(let c=0;c<cols;c++){ const x=(c+.5+(r%2?.5:0)-.25+R()*.5)*W/cols, y=amp*.25+(r+.5)*(band-amp*.5)/rows+(R()-.5)*amp*.5; nodes.push([x,Math.min(y,band-20),R()]); }
+    g.lineCap="round";
+    nodes.forEach((n,i)=>nodes.forEach((m,j)=>{ if(j<=i) return; const d=Math.hypot(n[0]-m[0],n[1]-m[1]); if(d>W/cols*1.45) return;
+      g.strokeStyle=(n[2]+m[2])>1?st.accent:st.rung; g.globalAlpha=.75; g.lineWidth=sq?3:4; g.beginPath(); g.moveTo(n[0],n[1]); const mx=(n[0]+m[0])/2+(n[1]-m[1])*.15, my=(n[1]+m[1])/2+(m[0]-n[0])*.15; g.quadraticCurveTo(mx,my,m[0],m[1]); g.stroke(); }));
+    nodes.forEach(([x,y,q])=>{ const rr=(sq?9:12)+q*(sq?8:12); g.globalAlpha=.25; g.fillStyle=q>.6?st.accent2:st.accent; g.beginPath(); g.arc(x,y,rr*2,0,Math.PI*2); g.fill();
+      g.globalAlpha=1; g.beginPath(); g.arc(x,y,rr,0,Math.PI*2); g.fill(); });
+    g.globalAlpha=1; return; }
+  if(kind==="bacteria"){ const R=rng(31); const n=sq?14:18; const L=amp*.9, Wd=amp*.34;
+    const cap=(x,y,len,wd,ang)=>{ g.save(); g.translate(x,y); g.rotate(ang); g.beginPath(); g.moveTo(-len/2,-wd/2); g.lineTo(len/2,-wd/2); g.arc(len/2,0,wd/2,-Math.PI/2,Math.PI/2); g.lineTo(-len/2,wd/2); g.arc(-len/2,0,wd/2,Math.PI/2,Math.PI*1.5); g.closePath(); g.restore(); };
+    for(let i=0;i<n;i++){ const len=L*(.6+R()*.8), wd=Wd*(.8+R()*.4), ang=R()*Math.PI, x=(i+.5)*W/n+(R()-.5)*W/n*.8, y=wd+R()*(band-2*wd-L*.4); const col=R()<.6?st.accent:st.accent2;
+      g.save(); g.translate(x,y); g.rotate(ang); g.strokeStyle=col; g.globalAlpha=.6; g.lineWidth=sq?2:3; for(let k=-1;k<=1;k+=2){ g.beginPath(); g.moveTo(k*(len/2+wd/2),0); g.bezierCurveTo(k*(len/2+wd),wd*.6,k*(len/2+wd*1.4),-wd*.6,k*(len/2+wd*1.9),0); g.stroke(); } g.restore();
+      cap(x,y,len,wd,ang); g.globalAlpha=.25; g.fillStyle=col; g.fill(); g.globalAlpha=.95; g.strokeStyle=col; g.lineWidth=sq?4:5; g.stroke();
+      g.save(); g.translate(x,y); g.rotate(ang); g.globalAlpha=.8; g.fillStyle=col; for(let k=-1;k<=1;k++){ g.beginPath(); g.arc(k*len*.28,(k%2)*wd*.12,wd*.13,0,Math.PI*2); g.fill(); } g.restore(); }
+    g.globalAlpha=1; return; }
+  if(kind==="petri"){ const R=rng(41); const dish=(cx,cy2,rad)=>{ g.globalAlpha=.12; g.fillStyle=st.accent; g.beginPath(); g.arc(cx,cy2,rad,0,Math.PI*2); g.fill();
+      g.globalAlpha=.9; g.strokeStyle=st.accent; g.lineWidth=sq?5:7; g.beginPath(); g.arc(cx,cy2,rad,0,Math.PI*2); g.stroke(); g.globalAlpha=.5; g.lineWidth=sq?2:3; g.beginPath(); g.arc(cx,cy2,rad*.9,0,Math.PI*2); g.stroke();
+      for(let k=0;k<Math.round(rad/7);k++){ const a=R()*Math.PI*2, d=Math.sqrt(R())*rad*.8, cr=rad*(.03+R()*.09); g.globalAlpha=.85; g.fillStyle=R()<.55?st.accent2:st.accent; g.beginPath(); g.arc(cx+Math.cos(a)*d,cy2+Math.sin(a)*d,cr,0,Math.PI*2); g.fill(); } };
+    const big=Math.min(band*.62, W*.22); dish(W*.80, band*.48, big); dish(W*.42, band*.30, big*.62); dish(W*.12, band*.62, big*.48); g.globalAlpha=1; return; }
+  if(kind==="chromosomes"){ const R=rng(53); const n=sq?8:10;
+    for(let i=0;i<n;i++){ const x=(i+.5)*W/n+(R()-.5)*W/n*.4, y=band*.5+(R()-.5)*band*.35, len=amp*(1.1+R()*.7), wd=amp*.26, ang=(R()-.5)*.7, col=i%3===1?st.accent2:st.accent;
+      g.save(); g.translate(x,y); g.rotate(ang); g.lineCap="round";
+      for(const s2 of [-1,1]){ g.strokeStyle=col; g.globalAlpha=.95; g.lineWidth=wd; g.beginPath(); g.moveTo(s2*wd*.55,-len/2); g.quadraticCurveTo(-s2*wd*.35,0,s2*wd*.55,len/2); g.stroke();
+        g.strokeStyle=st.bg; g.globalAlpha=.55; g.lineWidth=sq?3:4; for(const t of [-.32,-.18,.2,.34]){ g.beginPath(); g.moveTo(s2*wd*.55-wd*.45+(-s2*wd*.35-s2*wd*.55)*(1-Math.abs(t)*2)*.5,t*len); g.lineTo(s2*wd*.55+wd*.45+(-s2*wd*.35-s2*wd*.55)*(1-Math.abs(t)*2)*.5,t*len); g.stroke(); } }
+      g.globalAlpha=1; g.fillStyle=st.rung; g.beginPath(); g.arc(0,0,wd*.42,0,Math.PI*2); g.fill(); g.restore(); }
+    g.globalAlpha=1; return; }
   drawHelix(g,-40,W+40,cy,amp,st,Math.PI*2/(sq?360:420)); }
 async function drawPoster(p, cv){ const z=designState(p); const F=DFORMATS[z.format], st=DSTYLES[z.style]; cv.width=F.w; cv.height=F.h; const g=cv.getContext("2d"); const W=F.w, H=F.h;
   try{ await Promise.all(["800 80px 'Bricolage Grotesque'","600 40px 'IBM Plex Sans'","500 30px 'IBM Plex Mono'","400 40px 'IBM Plex Sans Hebrew'"].map(f=>document.fonts.load(f))); }catch{}
@@ -844,7 +865,7 @@ async function drawPoster(p, cv){ const z=designState(p); const F=DFORMATS[z.for
     while(fs>T.info*(sq?.72:.62)&&run.length*rh>avail){ fs-=1; rh=Math.round(fs*1.3); }       // shrink to fit the whole itinerary
     let n=Math.max(0,Math.min(run.length,Math.floor(avail/rh))); const more=run.length-n; if(more>0&&n>1) n-=1;
     if(n>0){ y+=sq?14:24; g.fillStyle=st.card; const bh=hd+(n+(run.length>n?1:0))*rh+(sq?10:14); roundRect(g,M-22,y,BW+44,bh,26); g.fill(); drawText(g,"ITINERARY",M+8,y+(sq?36:44),BW,`500 ${Math.round(T.info*.68)}px ${mono}`,st.accent,30,1);
-      run.slice(0,n).forEach((r,i)=>{ const yy=y+hd+i*rh+fs*.9; g.font=`600 ${Math.round(fs*.85)}px ${mono}`; g.fillStyle=st.accent2; g.fillText(r.time||"",M+8,yy); drawText(g,r.what,M+fs*4.2,yy,BW-fs*4.4,`400 ${Math.round(fs*.88)}px ${body}`,st.ink,T.lh,1); });
+      run.slice(0,n).forEach((r,i)=>{ const yy=y+hd+i*rh+fs*.9; g.font=`600 ${Math.round(fs*.85)}px ${mono}`; g.fillStyle=st.time||st.accent2; g.fillText(r.time||"",M+8,yy); drawText(g,r.what,M+fs*4.2,yy,BW-fs*4.4,`400 ${Math.round(fs*.88)}px ${body}`,st.ink,T.lh,1); });
       if(run.length>n) drawText(g,`+ ${run.length-n} more`,M+fs*4.2,y+hd+n*rh+fs*.9,CW,`400 ${Math.round(fs*.8)}px ${body}`,st.muted,T.lh,1); y+=bh; } }
   // footer line + text
   g.fillStyle=st.rung; g.globalAlpha=.6; g.fillRect(M,fy-(sq?40:56),CW,2); g.globalAlpha=1;
