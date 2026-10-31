@@ -121,15 +121,19 @@ async function purgeOld(){ if(S.purged||!isAdmin()) return; S.purged=true; const
 const whenExists = (col,id) => new Promise(res=>{ let n=0; const tick=()=>{ if(S[col].some(x=>x.id===id)||++n>40) return res(); setTimeout(tick,50); }; tick(); });
 // ───────── render loop ─────────
 let raf=0; function render(){ cancelAnimationFrame(raf); raf=requestAnimationFrame(doRender); }
-function views(){ const v=[["home","Home"],["board","Pipeline"],["issue","This issue"],["calendar","Calendar"],["tasks","Tasks"],["events","Event planner"],["contacts","Contacts"],["sources","Sources"],["places","Places"],["team","Team"],["archive","Archive"]];
-  if(A("suggestions").length) v.splice(1,0,["inbox","Suggestions"]); return v; }
+const NAV=[["home","Home",[]],["news","Newsletter",[["board","Pipeline"],["issue","This issue"],["sources","Sources"],["inbox","Suggestions"],["archive","Archive"]]],["events","Events",[["events","Event planner"],["calendar","Calendar"]]],["team","Team",[["tasks","Tasks"],["contacts","Contacts"],["team","People & access"]]]];
+const sectionOf = v => v==="home"?"home":["board","issue","sources","inbox","archive","places"].includes(v)?"news":["events","event","calendar"].includes(v)?"events":["tasks","contacts","team"].includes(v)?"team":"";
 function doRender(){
-  $("#who").innerHTML = S.meId ? avImg(S.meId)+`<span>${esc(nameOf(S.meId))}</span>${S.myEmail&&roleOf(S.myEmail)?`<span class="chip" style="background:rgba(255,255,255,.1);color:var(--band-ink)">${esc(roleOf(S.myEmail))}</span>`:""}` : "";
-  $("#btnNew").hidden = !S.canWrite || !S.db; $("#btnSettings").hidden = !S.db;
+  $("#who").innerHTML = S.meId ? `<b style="color:var(--ink)">${esc(nameOf(S.meId))}</b>${S.myEmail?`<div class="hint">${esc(S.myEmail)}${roleOf(S.myEmail)?" · "+esc(roleOf(S.myEmail)):""}</div>`:""}` : "";
+  $("#btnNew").hidden = !S.canWrite || !S.db; $("#btnUser").hidden = !S.db; $("#userName").textContent = S.meId? nameOf(S.meId) : ""; $("#userAv").innerHTML = S.meId? avImg(S.meId) : "";
   const myOpen=A("tasks").filter(t=>!t.done&&tAss(t).includes(S.meId)).length;
   const counts = {board:A("items").filter(i=>i.status!=="archived").length, calendar:upcoming(30).length, places:A("items").filter(i=>i.status!=="archived"&&i.location).length, issue:A("items").filter(i=>i.status==="issue").length,
     sources:S.sources.length, archive:S.issues.length, tasks:myOpen, events:A("plans").filter(p=>p.stage!=="done").length, contacts:A("contacts").length, inbox:A("suggestions").length};
-  $("#tabs").innerHTML = S.db ? views().map(([k,l])=>`<a href="#${k}" ${S.view===k||(S.view==="event"&&k==="events")?'aria-current="page"':""}>${l}${counts[k]?`<span class="n">${counts[k]}</span>`:""}</a>`).join("") : "";
+  const sec=sectionOf(S.view); const badge={news:A("suggestions").length,events:upcoming(7).filter(x=>x.kind!=="item").length,team:myOpen};
+  $("#mainnav").innerHTML = S.db ? NAV.map(([k,l,subs])=>`<a href="#${(S.lastSub&&S.lastSub[k])||(subs[0]?subs[0][0]:"home")}" ${sec===k?'aria-current="page"':""}>${l}${badge[k]?`<span class="n">${badge[k]}</span>`:""}</a>`).join("") : "";
+  const subs=(NAV.find(n=>n[0]===sec)||[])[2]||[];
+  $("#tabs").innerHTML = S.db&&subs.length ? subs.map(([k,l])=>`<a href="#${k}" ${S.view===k||(S.view==="event"&&k==="events")||(S.view==="places"&&k==="board")?'aria-current="page"':""}>${l}${counts[k]?`<span class="n">${counts[k]}</span>`:""}</a>`).join("") : "";
+  $("#tabs").hidden = !subs.length || !S.db;
   const m=$("#main");
   if(!S.db){ m.innerHTML = window.__authScreen ? window.__authScreen() : `<div class="empty"><b>Opening the desk…</b></div>`; window.__mountDNA&&window.__mountDNA(); return; }
   const banner = S.canWrite ? "" : `<div class="banner">Your account can't save changes. Ask an admin to add you on the Team page.</div>`;
@@ -142,6 +146,7 @@ function doRender(){
   m.querySelectorAll(".ppick").forEach(b=>{ if(picks[b.dataset.pp]){ pickSet(b,picks[b.dataset.pp]); b.dataset.dirty="1"; } });
   m.querySelectorAll("input,textarea,select").forEach(el=>{ const k=fieldKey(el); if(!k) return; const e=edited[k]; if(e){ if("c" in e) el.checked=e.c; else el.value=e.v; if(el.tagName==="SELECT") el.dataset.dirty="1"; } if(k===focusKey){ el.focus(); try{ if(sel) el.setSelectionRange(sel[0],sel[1]); }catch{} } });
   window.__mountDNA&&window.__mountDNA();
+  if(S.view==="event"&&S.etab==="design") refreshPoster();
   renderDrawer(); refreshProfiles(); purgeOld();
 }
 function fieldKey(el){ if(el.type==="file"||el.type==="search"&&false) return null; if(el.id) return "#"+el.id; const f=el.closest("form"); const ds=el.dataset; const tag=Object.keys(ds).filter(k=>k!=="dirty").map(k=>k+"="+ds[k]).join("&"); if(tag) return "@"+tag; if(f&&el.name) return (f.id||f.className+":"+Object.values(f.dataset).join(","))+"/"+el.name; return null; }
@@ -295,7 +300,8 @@ function card(i){
     </div></div>`;
 }
 function vBoard(){
-  const head=`<h2>Pipeline</h2><p class="sub">Every find moves left to right until it lands in the issue. Two 👍 moves an item straight into this issue.</p>`;
+  const viewSeg=`<div class="seg" role="tablist" style="margin-bottom:12px"><a role="tab" class="segbtn" href="#board" aria-selected="${S.view!=="places"}">Board</a><a role="tab" class="segbtn" href="#places" aria-selected="${S.view==="places"}">By place</a></div>`;
+  const head=`<h2>Pipeline</h2><p class="sub">Every find moves left to right until it lands in the issue. Two 👍 moves an item straight into this issue.</p>${viewSeg}`;
   if(!A("items").length) return head+`<div class="empty"><b>Nothing on the desk yet</b>Add the first thing you found this week.<br><br>${S.canWrite?`<button class="btn pri" data-act="new">+ Add item</button>`:""}</div>`;
   const list=filtered(A("items"));
   const sorted = a => a.slice().sort((x,y)=>(upvotes(y)-downvotes(y))-(upvotes(x)-downvotes(x)) || (y.createdAt||0)-(x.createdAt||0));
@@ -355,7 +361,7 @@ function vContacts(){ const {q,kind}=S.cf; const ql=q.trim().toLowerCase();
 
 function vPlaces(){
   const list=filtered(A("items").filter(i=>i.status!=="archived"&&(i.location||i.online)));
-  const head=`<h2>Places</h2><p class="sub">Where things happen, grouped by city or campus, so readers can spot what's near them.</p>${filterBar()}`;
+  const head=`<h2>Pipeline</h2><p class="sub">Where things happen, grouped by city or campus, so readers can spot what's near them.</p><div class="seg" role="tablist" style="margin-bottom:12px"><a role="tab" class="segbtn" href="#board" aria-selected="false">Board</a><a role="tab" class="segbtn" href="#places" aria-selected="true">By place</a></div>${filterBar()}`;
   if(!list.length) return head+`<div class="empty"><b>No locations yet</b>Items with a location show up here.</div>`;
   const g={}; list.forEach(i=>{ const k=i.online&&!i.location?"Online":(i.city||i.location||"Online").trim(); (g[k]=g[k]||[]).push(i); });
   return head+Object.keys(g).sort((a,b)=>a==="Online"?1:b==="Online"?-1:g[b].length-g[a].length).map(k=>`<div class="group-h"><h3>${k==="Online"?"🌐":"📍"} ${esc(k)}</h3><span class="eyebrow">${g[k].length}</span></div><div class="list">${g[k].map(i=>`<div class="row" data-open="${esc(i.id)}" style="cursor:pointer"><span class="dot" style="color:${tcol(i.type)}"></span><div class="grow"><div class="t" dir="auto">${esc(i.title)}</div><div class="s" dir="auto">${esc(i.location||"Online")}${i.date?" · "+fmtDW(i.date):""}</div></div>${dateChip(i)}</div>`).join("")}</div>`).join("");
@@ -705,14 +711,110 @@ function vEvents(){ const ps=A("plans");
       return `<section class="col"><div class="col-h"><h3>${l}</h3><span class="c">${cs.length}</span></div>${cs.map(planCard).join("")||`<div class="colempty">${k==="idea"?"Ideas go here.":"Nothing here."}</div>`}</section>`; }).join("")}</div>`
       :`<div class="empty"><b>No events yet</b>Pick a template (workshop, panel, social, tour, competition) and the planner sets up tasks, a run of show and a starter budget for you.<br><br>${S.canWrite?`<button class="btn pri" data-act="new-plan">+ Plan a new event</button>`:""}</div>`}`; }
 
+// ── share & design: itinerary text + poster/story maker ──
+const DFORMATS = {story:{label:"Instagram story",w:1080,h:1920},post:{label:"Square post",w:1080,h:1080},a4:{label:"A4 poster",w:1240,h:1754}};
+const DSTYLES = {
+  helix:{label:"Helix (navy)",bg:"#10223B",bg2:"#16304F",ink:"#F2F7FB",muted:"#A8BCD0",accent:"#36C3B0",accent2:"#F2735E",rung:"#4E6785",card:"rgba(255,255,255,.07)"},
+  light:{label:"Lab white",bg:"#F4F7FA",bg2:"#E6EDF3",ink:"#0F1D2E",muted:"#52657A",accent:"#0C8C7E",accent2:"#D9503B",rung:"#B7C6D4",card:"rgba(15,29,46,.05)"},
+  coral:{label:"Coral",bg:"#D9503B",bg2:"#C2412E",ink:"#FFF7F2",muted:"#FFD9CF",accent:"#10223B",accent2:"#FFE3A3",rung:"#F08A75",card:"rgba(16,34,59,.14)"}
+};
+const fmtLong = s => { const d=parseD(s); return d? d.toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long"}) : ""; };
+function evGuestsConfirmed(p){ return live(p.guests).map(([,g])=>g).filter(g=>g.status==="confirmed"&&["speaker","panelist","moderator"].includes(g.kind)); }
+function evRunSorted(p){ return live(p.run).map(([,r])=>r).sort((a,b)=>(a.time||"")<(b.time||"")?-1:(a.time||"")>(b.time||"")?1:(a.at||0)-(b.at||0)); }
+function itinerary(p, kind){
+  const wa=kind==="wa"; const b=t=>wa?`*${t}*`:t; const i=t=>wa?`_${t}_`:t; const L=[];
+  L.push(b(p.title)); const when=[p.date?fmtLong(p.date):"",p.time?(p.time+(p.endTime?"–"+p.endTime:"")):""].filter(Boolean).join(" · ");
+  if(when) L.push((wa?"🗓 ":"When: ")+when); if(p.location) L.push((wa?"📍 ":"Where: ")+p.location);
+  if(p.description) L.push("",p.description.trim());
+  const sp=evGuestsConfirmed(p); if(sp.length){ L.push("",b(sp.length>1?"Speakers":"Speaker")); sp.forEach(g=>L.push((wa?"▪️ ":"• ")+g.name+(g.note?" — "+g.note:""))); }
+  const run=evRunSorted(p).filter(r=>r.what&&(!p.time||!r.time||r.time>=p.time)); if(run.length){ L.push("",b("Schedule")); run.forEach(r=>L.push(`${r.time?r.time+"  ":""}${r.what}`)); }
+  if(p.link) L.push("",(wa?"🔗 Register: ":"Register: ")+p.link);
+  L.push("",i("Nucleate – Technion Branch"));
+  return L.join("\n");
+}
+function designState(p){ const sp=evGuestsConfirmed(p).map(g=>g.name);
+  const def={format:"story",style:"helix",kicker:"NUCLEATE TECHNION PRESENTS",title:p.title||"",subtitle:(p.description||"").split(/\n|\. /)[0].slice(0,120),
+    when:[p.date?fmtLong(p.date):"",p.time?(p.time+(p.endTime?"–"+p.endTime:"")):""].filter(Boolean).join(" · "),where:p.location||"",speakers:sp.join(" · "),cta:p.link?"Register via the link / QR":"Free entry · All students welcome",
+    showRun:true,showQR:!!p.link,footer:"Nucleate – Technion Branch"};
+  S.dz=S.dz||{}; if(!S.dz[p.id]) S.dz[p.id]=Object.assign(def,p.design||{}); return S.dz[p.id]; }
+function evDesign(p,ed){ const z=designState(p); const wa=itinerary(p,"wa"), plain=itinerary(p,"plain");
+  const fld=(k,l,ph,ta)=>`<label class="f">${l}${ta?`<textarea data-dz="${k}" rows="2" dir="auto" placeholder="${esc(ph||"")}">${esc(z[k]||"")}</textarea>`:`<input data-dz="${k}" dir="auto" value="${esc(z[k]||"")}" placeholder="${esc(ph||"")}">`}</label>`;
+  return `<div class="design-grid">
+    <div style="display:flex;flex-direction:column;gap:16px;min-width:0">
+      <div class="panel"><div class="panel-h"><h3>Itinerary to copy</h3><span class="hint">Built from the details, confirmed speakers and the run of show (from the start time on)</span></div>
+        <div class="seg" role="tablist" style="margin-bottom:10px">${[["wa","WhatsApp"],["plain","Plain text (Canva, Docs, email)"]].map(([k,l])=>`<button role="tab" aria-selected="${(S.itk||"wa")===k}" data-itk="${k}">${l}</button>`).join("")}</div>
+        <pre class="itin" dir="auto" id="itinText">${esc((S.itk||"wa")==="wa"?wa:plain)}</pre>
+        <div class="toolbar" style="margin:8px 0 0"><button class="btn pri" data-act="copy-itin">Copy</button><span class="hint">Edit the details, guests or run of show tabs to change it.</span></div></div>
+      <div class="panel"><div class="panel-h"><h3>Poster & story</h3>${ed?`<button class="btn sm" data-act="dz-save">Save for the team</button>`:""}</div>
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <div class="f" style="display:flex;flex-direction:column;gap:6px;font-size:12.5px;color:var(--muted);font-weight:500">Format<div class="seg" style="margin:0">${Object.entries(DFORMATS).map(([k,f])=>`<button type="button" aria-pressed="${z.format===k}" data-dzset="format:${k}">${f.label}</button>`).join("")}</div></div>
+          <div class="f" style="display:flex;flex-direction:column;gap:6px;font-size:12.5px;color:var(--muted);font-weight:500">Style<div class="swatches">${Object.entries(DSTYLES).map(([k,s])=>`<button type="button" class="sw" aria-pressed="${z.style===k}" data-dzset="style:${k}" style="--a:${s.bg};--b:${s.accent};--c:${s.accent2}"><span></span>${s.label}</button>`).join("")}</div></div>
+          ${fld("kicker","Small top line","NUCLEATE TECHNION PRESENTS")}${fld("title","Title","Event name",true)}${fld("subtitle","Subtitle","One line about the event",true)}
+          <div class="grid2">${fld("when","When")}${fld("where","Where")}</div>
+          ${fld("speakers","Speakers / guests","Names, separated by ·")}${fld("cta","Call to action","Register via the link / QR")}${fld("footer","Footer")}
+          <div class="toolbar" style="margin:0"><label class="chk"><input type="checkbox" data-dzb="showRun" ${z.showRun?"checked":""}> Show schedule</label><label class="chk"><input type="checkbox" data-dzb="showQR" ${z.showQR?"checked":""} ${p.link?"":"disabled"}> QR code to the registration link${p.link?"":" (add a link in Details first)"}</label></div>
+        </div></div>
+    </div>
+    <div class="panel poster-panel"><div class="panel-h"><h3>Preview</h3><span class="hint">${DFORMATS[z.format].w}×${DFORMATS[z.format].h}px</span></div>
+      <div class="poster-wrap"><canvas id="posterCanvas" aria-label="Poster preview"></canvas></div>
+      <div class="toolbar" style="margin:12px 0 0"><button class="btn pri" data-act="dz-download">⤓ Download PNG</button><button class="btn" data-act="dz-reset">Reset to event details</button></div>
+      <div class="hint">Tip: download it, then drop it into Canva to add photos or logos.</div></div>
+  </div>`; }
+
+// Draw the poster on a canvas.
+let qrLoading=null;
+function loadQR(){ if(window.qrcode) return Promise.resolve(); if(!qrLoading) qrLoading=new Promise(res=>{ const s=document.createElement("script"); s.src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"; s.onload=res; s.onerror=res; document.head.append(s); }); return qrLoading; }
+const RTL=/[֐-׿؀-ۿ]/;
+function wrapLines(g, text, maxW){ const out=[]; String(text||"").split("\n").forEach(par=>{ const words=par.split(/\s+/).filter(Boolean); let line=""; words.forEach(w=>{ const t=line?line+" "+w:w; if(g.measureText(t).width>maxW&&line){ out.push(line); line=w; } else line=t; }); if(line) out.push(line); }); return out; }
+function drawText(g, text, x, y, maxW, font, color, lh, maxLines){ g.font=font; g.fillStyle=color; let lines=wrapLines(g,text,maxW); if(maxLines&&lines.length>maxLines){ lines=lines.slice(0,maxLines); let l=lines[maxLines-1]; while(g.measureText(l+"…").width>maxW&&l.length) l=l.slice(0,-1); lines[maxLines-1]=l+"…"; }
+  lines.forEach((l,i)=>{ const rtl=RTL.test(l); g.direction=rtl?"rtl":"ltr"; g.textAlign=rtl?"right":"left"; g.fillText(l, rtl?x+maxW:x, y+i*lh); }); g.direction="ltr"; g.textAlign="left"; return y+lines.length*lh; }
+function drawHelix(g, x0, x1, cy, amp, st, k, front){ const pts=[]; for(let x=x0;x<=x1;x+=6){ const ph=k*(x-x0); pts.push({x,y1:cy+amp*Math.sin(ph),y2:cy+amp*Math.sin(ph+Math.PI),z:Math.cos(ph)}); }
+  for(let i=0;i<pts.length;i+=5){ const p=pts[i]; g.strokeStyle=st.rung; g.globalAlpha=.7; g.lineWidth=4; g.beginPath(); g.moveTo(p.x,p.y1); g.lineTo(p.x,p.y2); g.stroke(); }
+  for(const pass of [0,1]) for(const [key,col,sg] of [["y1",st.accent,1],["y2",st.accent2,-1]]) for(let i=1;i<pts.length;i++){ const a=pts[i-1], b=pts[i]; const fr=b.z*sg>0; if((pass===1)!==fr) continue; g.strokeStyle=col; g.globalAlpha=fr?1:.35; g.lineWidth=fr?14:9; g.lineCap="round"; g.beginPath(); g.moveTo(a.x,a[key]); g.lineTo(b.x,b[key]); g.stroke(); }
+  g.globalAlpha=1; }
+async function drawPoster(p, cv){ const z=designState(p); const F=DFORMATS[z.format], st=DSTYLES[z.style]; cv.width=F.w; cv.height=F.h; const g=cv.getContext("2d"); const W=F.w, H=F.h;
+  try{ await Promise.all(["800 80px 'Bricolage Grotesque'","600 40px 'IBM Plex Sans'","500 30px 'IBM Plex Mono'","400 40px 'IBM Plex Sans Hebrew'"].map(f=>document.fonts.load(f))); }catch{}
+  const grd=g.createLinearGradient(0,0,0,H); grd.addColorStop(0,st.bg); grd.addColorStop(1,st.bg2); g.fillStyle=grd; g.fillRect(0,0,W,H);
+  const disp="'Bricolage Grotesque','IBM Plex Sans Hebrew',sans-serif", body="'IBM Plex Sans','IBM Plex Sans Hebrew',sans-serif", mono="'IBM Plex Mono',monospace";
+  const M=Math.round(W*0.08), CW=W-2*M, sq=z.format==="post";
+  const run=evRunSorted(p).filter(r=>r.what&&(!p.time||!r.time||r.time>=p.time)); const showRun=z.showRun&&run.length&&!sq;
+  const qrSize=z.showQR&&p.link?(sq?200:250):0;
+  // sizes per format
+  const T={story:{helixY:.10,amp:95,start:.205,title:112,sub:42,info:40,lh:52},a4:{helixY:.09,amp:90,start:.19,title:100,sub:40,info:38,lh:50},post:{helixY:.13,amp:62,start:.27,title:80,sub:32,info:32,lh:42}}[z.format];
+  drawHelix(g,-40,W+40,H*T.helixY,T.amp,st,Math.PI*2/(sq?360:420));
+  const fy=H-(sq?54:76);                                   // footer baseline
+  const qy=qrSize? fy-(sq?66:92)-qrSize : fy;              // QR top
+  const contentBottom=qrSize? qy-30 : fy-(sq?150:190);
+  let y=H*T.start;
+  if(z.kicker) y=drawText(g,z.kicker.toUpperCase(),M,y,CW,`500 ${Math.round(T.info*.75)}px ${mono}`,st.accent,T.lh,1)+T.lh*.35;
+  y=drawText(g,z.title,M,y+T.title*.82,CW,`800 ${T.title}px ${disp}`,st.ink,T.title*1.02,sq?2:3)+T.title*.05;
+  g.fillStyle=st.accent2; g.fillRect(M,y,sq?80:120,sq?8:10); y+=sq?34:52;
+  if(z.subtitle) y=drawText(g,z.subtitle,M,y+T.sub,CW,`400 ${T.sub}px ${body}`,st.muted,T.sub*1.3,sq?1:2)+T.lh*.45;
+  const infoW=sq&&qrSize?CW-qrSize-40:CW;
+  [["🗓",z.when],["📍",z.where],["🎤",z.speakers]].filter(([,v])=>v).forEach(([ic,v])=>{ g.font=`400 ${T.info}px ${body}`; g.fillStyle=st.ink; g.fillText(ic,M,y+T.info); y=drawText(g,v,M+T.info*1.65,y+T.info,infoW-T.info*1.65,`600 ${T.info}px ${body}`,st.ink,T.lh,sq?1:2)+T.lh*.3; });
+  if(showRun){ const rh=Math.round(T.info*1.32); const avail=contentBottom-(y+24)-70; const n=Math.max(0,Math.min(run.length,Math.floor(avail/rh)));
+    if(n>0){ y+=24; g.fillStyle=st.card; const bh=66+n*rh; roundRect(g,M-22,y,CW+44,bh,26); g.fill(); drawText(g,"SCHEDULE",M+8,y+44,CW,`500 ${Math.round(T.info*.68)}px ${mono}`,st.accent,30,1);
+      run.slice(0,n).forEach((r,i)=>{ const yy=y+66+i*rh+T.info*.9; g.font=`600 ${Math.round(T.info*.85)}px ${mono}`; g.fillStyle=st.accent2; g.fillText(r.time||"",M+8,yy); drawText(g,r.what,M+T.info*4.2,yy,CW-T.info*4.4,`400 ${Math.round(T.info*.88)}px ${body}`,st.ink,T.lh,1); }); y+=bh; } }
+  // footer line + text
+  g.fillStyle=st.rung; g.globalAlpha=.6; g.fillRect(M,fy-(sq?40:56),CW,2); g.globalAlpha=1;
+  drawText(g,z.footer,M,fy,CW,`600 ${sq?26:32}px ${disp}`,st.ink,40,1);
+  // QR + call to action
+  let qrOk=false; if(qrSize){ await loadQR(); if(window.qrcode){ try{ const q=qrcode(0,"M"); q.addData(p.link); q.make(); const n=q.getModuleCount(); const qx=W-M-qrSize; g.fillStyle="#fff"; roundRect(g,qx-14,qy-14,qrSize+28,qrSize+28,18); g.fill(); g.fillStyle="#0F1D2E"; const c=qrSize/n; for(let r=0;r<n;r++) for(let cc=0;cc<n;cc++) if(q.isDark(r,cc)) g.fillRect(qx+cc*c,qy+r*c,Math.ceil(c),Math.ceil(c)); qrOk=true; }catch{} } }
+  if(z.cta){ const cs=sq?34:46; const ctaW=qrOk?CW-qrSize-50:CW; const cy=qrOk? Math.max(y+cs+10, qy+qrSize/2-cs*.2) : Math.max(y+cs+20, fy-(sq?80:110)); drawText(g,z.cta,M,cy,ctaW,`700 ${cs}px ${disp}`,st.accent,cs*1.2,qrOk?3:2); }
+}
+function roundRect(g,x,y,w,h,r){ g.beginPath(); g.moveTo(x+r,y); g.arcTo(x+w,y,x+w,y+h,r); g.arcTo(x+w,y+h,x,y+h,r); g.arcTo(x,y+h,x,y,r); g.arcTo(x,y,x+w,y,r); g.closePath(); }
+let posterT=0; function refreshPoster(){ clearTimeout(posterT); posterT=setTimeout(()=>{ const cv=$("#posterCanvas"); const p=S.plans.find(x=>x.id===S.eventId); if(cv&&p) drawPoster(p,cv); },60); }
+async function downloadPoster(){ const p=S.plans.find(x=>x.id===S.eventId); const cv=document.createElement("canvas"); await drawPoster(p,cv); const z=designState(p);
+  cv.toBlob(b=>{ const a=document.createElement("a"); a.href=URL.createObjectURL(b); a.download=`${(z.title||p.title||"event").replace(/[^\w֐-׿ -]/g,"").trim().replace(/\s+/g,"-").toLowerCase()||"event"}-${z.format}.png`; document.body.append(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },1000); },"image/png"); toast("Poster downloaded."); }
+
 // ── event page ──
 function vEvent(){
   const p=S.plans.find(x=>x.id===S.eventId);
   if(!p||p.deleted) return `<div class="empty"><b>${S.plans.length?"This event isn't here anymore":"Loading…"}</b>${S.plans.length?`It may have been moved to the Trash.<br><br><a class="btn" href="#events">Back to events</a>`:""}</div>`;
   const ed=canEditPlan(p); const tab=S.etab||"overview"; const ts=A("tasks").filter(t=>t.planId===p.id); const d=p.date?daysTo(p.date):null;
   const done=ts.filter(t=>t.done).length; const over=ts.filter(t=>!t.done&&t.due&&daysTo(t.due)<0).length;
-  const tabs=[["overview","Overview"],["tasks",`Tasks${ts.length?` (${ts.length-done})`:""}`],["team","Team & roles"],["budget","Budget"],["guests",`Guests${live(p.guests).length?` (${live(p.guests).length})`:""}`],["run","Run of show"],["after","After the event"]];
-  const body={overview:evOverview,tasks:evTasks,team:evTeam,budget:evBudget,guests:evGuests,run:evRun,after:evAfter}[tab](p,ed,ts);
+  const tabs=[["overview","Overview"],["tasks",`Tasks${ts.length?` (${ts.length-done})`:""}`],["team","Team & roles"],["budget","Budget"],["guests",`Guests${live(p.guests).length?` (${live(p.guests).length})`:""}`],["run","Run of show"],["design","Share & design"],["after","After the event"]];
+  const body={overview:evOverview,tasks:evTasks,team:evTeam,budget:evBudget,guests:evGuests,run:evRun,design:evDesign,after:evAfter}[tab](p,ed,ts);
   return `<div class="crumbs"><a href="#events">← Event planner</a></div>
     <section class="evhead"><div class="evtitle"><span class="ic">${(TEMPLATES[p.template]||{}).icon||"🎪"}</span><div style="min-width:0"><h2 dir="auto">${esc(p.title)}</h2>
       <div class="meta">${p.date?`<span class="chip ${d!==null&&d>=0&&d<=7?"soon":""}">🗓 ${esc(fmtDW(p.date))}${p.time?" · "+esc(p.time):""}${p.endTime?"–"+esc(p.endTime):""}</span>`:`<span class="chip hot">No date yet</span>`}${p.location?`<span class="chip">📍 ${esc(p.location)}</span>`:""}${d!==null&&p.stage!=="done"?`<span class="chip ${d<0?"":"ok"}">${d>0?`in ${plural(d,"day")}`:d===0?"Today!":`${plural(-d,"day")} ago`}</span>`:""}${ts.length?`<span class="chip ${over?"hot":""}">${done}/${ts.length} tasks${over?` · ${over} overdue`:""}</span>`:""}</div></div></div>
@@ -879,7 +981,9 @@ async function importBackup(file){ let data; try{ data=JSON.parse(await file.tex
 
 // ───────── events ─────────
 document.addEventListener("click", async e=>{
-  const t=e.target.closest("[data-act],[data-open],[data-meet],[data-plan],[data-task],[data-contact],[data-vote],[data-next],[data-pnext],[data-check],[data-delsrc],[data-move],[data-copyissue],[data-cal],[data-day],[data-done],[data-tf],[data-rsvp],[data-pstage],[data-ck],[data-ckdel],[data-mention],[data-restore],[data-purge],[data-sugg-ok],[data-sugg-no],[data-unskip],[data-ppid],[data-etab],[data-etf],[data-evstage],[data-tplapply],[data-roledel],[data-buddel],[data-guestdel],[data-rundel]");
+  const mb=e.target.closest("[data-menu]"); if(mb){ const m=$("#menu-"+mb.dataset.menu); const open=m.hidden; closeMenus(); m.hidden=!open; mb.setAttribute("aria-expanded",String(open)); if(open) m.querySelector("button,a")?.focus(); return; }
+  if(!e.target.closest(".menu")) closeMenus(); else setTimeout(closeMenus,0);
+  const t=e.target.closest("[data-act],[data-open],[data-meet],[data-plan],[data-task],[data-contact],[data-vote],[data-next],[data-pnext],[data-check],[data-delsrc],[data-move],[data-copyissue],[data-cal],[data-day],[data-done],[data-tf],[data-rsvp],[data-pstage],[data-ck],[data-ckdel],[data-mention],[data-restore],[data-purge],[data-sugg-ok],[data-sugg-no],[data-unskip],[data-ppid],[data-itk],[data-dzset],[data-etab],[data-etf],[data-evstage],[data-tplapply],[data-roledel],[data-buddel],[data-guestdel],[data-rundel]");
   if(!t){ if(e.target.classList.contains("scrim")) closeDrawer(); return; }
   const ds=t.dataset;
   if(ds.ppid){ const box=t.closest(".ppick"); const cur=pickVal(box); const next=cur.includes(ds.ppid)?cur.filter(x=>x!==ds.ppid):[...cur,ds.ppid]; pickSet(box,next); box.dataset.dirty="1"; if(box.dataset.ppsave) savePick(box,box.dataset.ppsave,next,cur); return; }
@@ -899,6 +1003,8 @@ document.addEventListener("click", async e=>{
     await upd("meetings",id,occ?{orsvp:{[occ]:{[S.meId]:v}},...stamp()}:{rsvp:{[S.meId]:v},...stamp()}); S.drawer.base=null; return; }
   if(ds.etab){ e.preventDefault(); S.etab=ds.etab; render(); window.scrollTo(0,0); return; }
   if(ds.etf){ S.etf=ds.etf; render(); return; }
+  if(ds.itk){ S.itk=ds.itk; render(); return; }
+  if(ds.dzset){ const p=S.plans.find(x=>x.id===S.eventId); const [k,v]=ds.dzset.split(":"); designState(p)[k]=v; render(); return; }
   const EP=()=>S.plans.find(x=>x.id===S.eventId);
   if(ds.evstage){ const p=EP(); if(p&&p.stage!==ds.evstage) evUpdate(p,{stage:ds.evstage},`moved event to ${PSTAGE[ds.evstage]}:`); return; }
   if(ds.tplapply){ const p=EP(); if(p) applyTemplate(p,ds.tplapply); return; }
@@ -939,6 +1045,11 @@ document.addEventListener("click", async e=>{
   else if(a==="ev-del-no"){ S.evConfirmDel=false; render(); }
   else if(a==="ev-del-yes"){ S.evConfirmDel=false; const id=S.eventId; await trash("plans",id); location.hash="events"; }
   else if(a==="ev-shift"){ const p=S.plans.find(x=>x.id===S.eventId); let n=0; for(const t of A("tasks").filter(t=>t.planId===p.id&&typeof t.relDays==="number"&&!t.done)){ const nd=shiftS(p.date,t.relDays); if(t.due!==nd&&await upd("tasks",t.id,{due:nd,...stamp()})) n++; } toast(`Updated ${plural(n,"due date")}.`); }
+  else if(a==="copy-itin"){ const p=S.plans.find(x=>x.id===S.eventId); copyText(itinerary(p,S.itk||"wa")).then(()=>toast("Itinerary copied.")); }
+  else if(a==="dz-download"){ downloadPoster(); }
+  else if(a==="dz-reset"){ const p=S.plans.find(x=>x.id===S.eventId); const z=designState(p); const keep={format:z.format,style:z.style}; delete S.dz[p.id]; Object.assign(designState(Object.assign({},p,{design:null})),keep); render(); }
+  else if(a==="dz-save"){ const p=S.plans.find(x=>x.id===S.eventId); const z=designState(p); if(await evUpdate(p,{design:Object.assign({},z)},"saved the poster for")) toast("Poster settings saved for the team."); }
+  else if(a==="new-task"){ location.hash="tasks"; setTimeout(()=>$("#tTitle")?.focus(),120); }
   else if(a==="ev-dup"){ duplicatePlan(S.plans.find(x=>x.id===S.eventId)); }
   else if(a==="contact-today") submitContact(true);
   else if(a==="occ-skip"){ const mt=S.meetings.find(x=>x.id===D.id), k=D.occ; if(await upd("meetings",mt.id,{exceptions:{[k]:{skipped:true}},...stamp()})){ logAct(`skipped ${fmtD(k)}:`,mt.title); closeDrawer(); toast(`${fmtDW(k)} skipped.`,{label:"Undo",fn:()=>upd("meetings",mt.id,{exceptions:{[k]:{skipped:false}},...stamp()})}); } }
@@ -958,7 +1069,8 @@ document.addEventListener("click", async e=>{
   else if(a==="copy-public"){ copyText(new URL("public.html",location.href).href).then(()=>toast("Public page link copied.")); }
   else if(a==="go-trash"){ closeDrawer(); location.hash="trash"; }
 });
-document.addEventListener("keydown", e=>{ if(e.key==="Escape"&&$("#layer").querySelector(".scrim")) closeDrawer();
+function closeMenus(){ document.querySelectorAll(".menu").forEach(m=>m.hidden=true); document.querySelectorAll("[data-menu]").forEach(b=>b.setAttribute("aria-expanded","false")); }
+document.addEventListener("keydown", e=>{ if(e.key==="Escape") closeMenus(); if(e.key==="Escape"&&$("#layer").querySelector(".scrim")) closeDrawer();
   if((e.key==="Enter"||e.key===" ")&&e.target.matches&&e.target.matches(".ag[role=button],.row[role=button],.card[role=button]")){ e.preventDefault(); e.target.click(); } });
 document.addEventListener("submit", async e=>{
   e.preventDefault(); const f=e.target, id=f.id;
@@ -990,11 +1102,13 @@ document.addEventListener("submit", async e=>{
     try{ await S.db.collection("sources").add({name,url,kind:$("#sKind").value,freq:Number($("#sFreq").value),lastChecked:0,lastCheckedBy:null,addedBy:S.meId,createdAt:Date.now()}); logAct("added source",name); f.reset(); }catch(er){writeErr(er);} }
 });
 document.addEventListener("input", e=>{
+  if(e.target.dataset.dz){ const p=S.plans.find(x=>x.id===S.eventId); if(p){ designState(p)[e.target.dataset.dz]=e.target.value; refreshPoster(); } return; }
   if(e.target.id==="fq"){ S.f.q=e.target.value; clearTimeout(S._qT); S._qT=setTimeout(()=>{ render(); requestAnimationFrame(()=>{ const q=$("#fq"); if(q){ q.focus(); q.setSelectionRange(q.value.length,q.value.length);} }); },200); }
   if(e.target.id==="cq"){ S.cf.q=e.target.value; clearTimeout(S._cT); S._cT=setTimeout(render,200); }
 });
 document.addEventListener("change", e=>{
-  const id=e.target.id, ds=e.target.dataset; if(e.target.tagName==="SELECT") e.target.dataset.dirty="1";
+  const id=e.target.id, ds=e.target.dataset;
+  if(ds.dzb){ const p=S.plans.find(x=>x.id===S.eventId); designState(p)[ds.dzb]=e.target.checked; refreshPoster(); return; } if(e.target.tagName==="SELECT") e.target.dataset.dirty="1";
   if(id==="ftype"){S.f.type=e.target.value;render();} else if(id==="fwho"){S.f.who=e.target.value;render();} else if(id==="ftag"){S.f.tag=e.target.value;render();} else if(id==="ckind"){S.cf.kind=e.target.value;render();}
   else if(id==="intro"){ saveSettings({draftIntro:e.target.value}); }
   else if(ds.bud){ const v=e.target.type==="checkbox"?e.target.checked:e.target.tagName==="SELECT"?e.target.value:(Number(e.target.value)||0); evUpdate(S.plans.find(x=>x.id===S.eventId),{budget:{[ds.bud]:{[ds.f]:v}}}).then(()=>{ e.target.defaultValue=e.target.value; delete e.target.dataset.dirty; if(e.target.type==="checkbox") e.target.defaultChecked=e.target.checked; }); }
@@ -1034,7 +1148,7 @@ function openSettings(){
 
 // ───────── routing + boot ─────────
 const ALLV=["home","inbox","board","calendar","tasks","events","contacts","places","issue","sources","team","archive","trash"];
-function route(){ const h=location.hash.replace("#",""); if(h.startsWith("event-")){ if(S.eventId!==h.slice(6)){ S.etab="overview"; S.evConfirmDel=false; } S.view="event"; S.eventId=h.slice(6); window.scrollTo(0,0); } else S.view=ALLV.includes(h)?h:"home"; render(); }
+function route(){ const h=location.hash.replace("#",""); S.lastSub=S.lastSub||{}; if(h.startsWith("event-")){ if(S.eventId!==h.slice(6)){ S.etab="overview"; S.evConfirmDel=false; } S.view="event"; S.eventId=h.slice(6); window.scrollTo(0,0); } else S.view=ALLV.includes(h)?h:"home"; const sc=sectionOf(S.view); if(sc&&sc!=="home") S.lastSub[sc]=S.view==="event"?"events":S.view==="places"?"board":S.view; closeMenus(); render(); }
 window.addEventListener("hashchange",route);
 window.addEventListener("people-changed",e=>{ S.known=e.detail||[]; S.profiles={}; render(); });
 async function boot(){

@@ -64,7 +64,7 @@ header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;backgroun
 .mast .sp{flex:1}
 .who{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--band-muted)}
 .av{width:24px;height:24px;border-radius:50%;object-fit:cover;flex:none;background:var(--sunk)}
-.tabs{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;margin-top:4px}
+.tabs{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none}
 .tabs::-webkit-scrollbar{display:none}
 .tabs a{padding:9px 12px 10px;text-decoration:none;color:var(--band-muted);font-weight:500;white-space:nowrap;border-bottom:3px solid transparent}
 .tabs a:hover{color:var(--band-ink)}
@@ -314,6 +314,46 @@ b.men{color:var(--accent)}
 .br{border-top:1px solid var(--line);padding-top:6px}
 .br input[type=checkbox]{width:18px;height:18px;accent-color:var(--accent);justify-self:center}
 .evtask select,.evtask input[type=date]{flex:0 1 auto}
+
+/* navigation: 4 sections + sub-pages */
+.mast{flex-wrap:nowrap;padding-block:10px}
+.mainnav{display:flex;gap:2px;margin-left:18px;overflow-x:auto;scrollbar-width:none}
+.mainnav::-webkit-scrollbar{display:none}
+.mainnav a{padding:8px 14px;border-radius:9px;color:var(--band-muted);text-decoration:none;font-weight:600;font-size:15px;white-space:nowrap}
+.mainnav a:hover{color:var(--band-ink);background:rgba(255,255,255,.06)}
+.mainnav a[aria-current=page]{color:var(--band-ink);background:rgba(255,255,255,.12)}
+.mainnav .n{font-family:var(--mono);font-size:11px;margin-left:6px;background:var(--helix-b);color:#fff;border-radius:999px;padding:1px 6px}
+.subnav{display:flex;gap:2px;background:var(--band-2);overflow-x:auto;scrollbar-width:none;padding-left:max(16px,env(safe-area-inset-left,0px),calc((100% - 1280px)/2 + 16px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.subnav::-webkit-scrollbar{display:none}
+.subnav a{padding:9px 12px 10px}
+.subnav-inner{max-width:1280px;margin:0 auto}
+.menuwrap{position:relative}
+.menu{position:absolute;top:calc(100% + 6px);left:0;min-width:220px;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:12px;box-shadow:0 10px 30px rgba(6,14,24,.25);padding:6px;z-index:35;display:flex;flex-direction:column}
+.menu.right{left:auto;right:0}
+.menu[hidden]{display:none!important}
+.menu button,.menu a{display:flex;align-items:center;gap:10px;text-align:start;background:none;border:0;padding:9px 10px;border-radius:8px;cursor:pointer;color:var(--ink);text-decoration:none;font-weight:500}
+.menu button:hover,.menu a:hover,.menu button:focus-visible,.menu a:focus-visible{background:var(--sunk)}
+.menu .mi{width:20px;text-align:center}
+.menu .who{padding:8px 10px 10px;border-bottom:1px solid var(--line);margin-bottom:4px;color:var(--muted)}
+.userbtn{display:inline-flex;align-items:center;gap:8px;background:transparent;border:1px solid rgba(255,255,255,.18);color:var(--band-ink);border-radius:999px;padding:4px 10px 4px 4px;cursor:pointer;font:inherit}
+.userbtn:hover{border-color:rgba(255,255,255,.4)}
+@media (max-width:760px){.mast{flex-wrap:wrap}.mainnav{order:5;flex-basis:100%;margin:6px -4px 0}.mainnav a{padding:7px 12px;font-size:14px}.userbtn .un{display:none}.brand .n2{display:none}}
+a.segbtn{border:0;padding:6px 12px;border-radius:8px;font-weight:500;color:var(--muted);text-decoration:none}
+a.segbtn[aria-selected=true]{background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
+/* share & design */
+.design-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:start}
+@media (max-width:980px){.design-grid{grid-template-columns:1fr}}
+.itin{white-space:pre-wrap;unicode-bidi:plaintext;font-family:var(--body);font-size:13.5px;background:var(--sunk);border-radius:10px;padding:12px 14px;margin:0;max-height:340px;overflow:auto;overflow-wrap:anywhere}
+.poster-panel{position:sticky;top:calc(130px + env(safe-area-inset-top,0px))}
+@media (max-width:980px){.poster-panel{position:static}}
+.poster-wrap{background:repeating-conic-gradient(var(--sunk) 0 25%,transparent 0 50%) 0 0/20px 20px;border-radius:12px;padding:14px;display:flex;justify-content:center}
+.poster-wrap canvas{max-width:100%;max-height:62vh;width:auto;height:auto;border-radius:6px;box-shadow:0 8px 28px rgba(6,14,24,.3)}
+.swatches{display:flex;gap:8px;flex-wrap:wrap}
+.sw{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:4px 12px 4px 4px;cursor:pointer;font-weight:500;color:var(--ink)}
+.sw span{width:26px;height:26px;border-radius:50%;background:conic-gradient(var(--b) 0 33%,var(--c) 0 66%,var(--a) 0)}
+.sw[aria-pressed=true]{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
+.chk{display:inline-flex;gap:8px;align-items:center;font-size:13px;color:var(--ink)}
+.chk input{width:16px;height:16px;accent-color:var(--accent)}
 @media (prefers-reduced-motion:no-preference){.drawer{animation:slide .18s ease-out}@keyframes slide{from{transform:translateX(24px);opacity:.6}}}
 </style>
 </head>
@@ -325,14 +365,31 @@ b.men{color:var(--accent)}
         <svg width="30" height="34" viewBox="0 0 30 34" aria-hidden="true"><path d="M7 2c0 10 16 20 16 30M23 2c0 10-16 20-16 30" stroke="var(--helix-a)" stroke-width="2.6" fill="none" stroke-linecap="round"/><path d="M9.5 9h11M8.5 17h13M9.5 25h11" stroke="var(--helix-b)" stroke-width="2.2" stroke-linecap="round"/></svg>
         <span><span class="n1">Nucleate</span><br><span class="n2">Technion Branch</span></span>
       </a>
+      <nav class="mainnav" id="mainnav" aria-label="Sections"></nav>
       <div class="sp"></div>
-      <div class="who" id="who"></div>
-      <button class="btn sm" data-act="settings" id="btnSettings" hidden>Settings</button>
-      <button class="btn sm ghost" data-auth="signout" id="btnSignOut" hidden>Sign out</button>
-      <button class="btn pri" data-act="new" id="btnNew" hidden>+ Add item</button>
+      <div class="menuwrap">
+        <button class="btn pri" id="btnNew" data-menu="new" aria-haspopup="true" aria-expanded="false" hidden>+ New</button>
+        <div class="menu" id="menu-new" role="menu" hidden>
+          <button role="menuitem" data-act="new"><span class="mi">📰</span>Newsletter item</button>
+          <button role="menuitem" data-act="new-task"><span class="mi">✓</span>Task</button>
+          <button role="menuitem" data-act="new-meeting"><span class="mi">📅</span>Meeting or call</button>
+          <button role="menuitem" data-act="new-plan"><span class="mi">🎪</span>Event to plan</button>
+          <button role="menuitem" data-act="new-contact"><span class="mi">👤</span>Contact</button>
+        </div>
+      </div>
+      <div class="menuwrap">
+        <button class="userbtn" id="btnUser" data-menu="user" aria-haspopup="true" aria-expanded="false" hidden><span id="userAv"></span><span id="userName" class="un"></span><span aria-hidden="true">▾</span></button>
+        <div class="menu right" id="menu-user" role="menu" hidden>
+          <div class="who" id="who"></div>
+          <button role="menuitem" data-act="settings"><span class="mi">⚙</span>Settings</button>
+          <button role="menuitem" data-act="go-trash"><span class="mi">🗑</span>Trash</button>
+          <a role="menuitem" href="public.html" target="_blank" rel="noopener"><span class="mi">🌐</span>Public page</a>
+          <button role="menuitem" data-auth="signout" id="btnSignOut" hidden><span class="mi">↩</span>Sign out</button>
+        </div>
+      </div>
     </div>
-    <nav class="tabs" id="tabs" aria-label="Views"></nav>
   </div>
+  <nav class="tabs subnav" id="tabs" aria-label="Pages" hidden></nav>
 </header>
 <main class="wrap" id="main"><div class="empty"><b>Opening the desk…</b>Connecting to your shared workspace.</div><noscript><p>This site needs JavaScript turned on.</p></noscript></main>
 <div id="layer"></div>
