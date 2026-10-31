@@ -391,7 +391,7 @@ a.segbtn[aria-selected=true]{background:var(--surface);color:var(--ink);box-shad
   </div>
   <nav class="tabs subnav" id="tabs" aria-label="Pages" hidden></nav>
 </header>
-<main class="wrap" id="main"><div class="empty"><b>Opening the desk…</b>Connecting to your shared workspace.</div><noscript><p>This site needs JavaScript turned on.</p></noscript></main>
+<main class="wrap" id="main"><div class="empty"><b>Loading the site…</b>One moment.</div><noscript><p>This site needs JavaScript turned on.</p></noscript></main>
 <div id="layer"></div>
 
 <script>
@@ -433,7 +433,15 @@ a.segbtn[aria-selected=true]{background:var(--surface);color:var(--ink);box-shad
 })();
 </script>
 
-<script src="app.js"></script>
-<script type="module" src="./firebase-backend.js"></script>
+<script src="app.js?v=202611011300"></script>
+<script type="module" src="./firebase-backend.js?v=202611011300"></script>
+<script>
+// Safety net: if the site hasn't started after 15 seconds, explain what to do instead of spinning forever.
+window.__SITE_BUILD="202611011300";
+window.__bootErrors=[]; window.addEventListener("error",e=>window.__bootErrors.push(e.message||String(e.error||"")));
+setTimeout(()=>{ const m=document.getElementById("main"); if(!m||!/Loading the site|Opening the desk/.test(m.textContent)) return;
+  const mismatch=!window.__startApp?"The site's files didn't load (app.js is missing or out of date).":(window.__APP_BUILD&&window.__APP_BUILD!==window.__SITE_BUILD)?"Your browser has a mix of old and new files.":"";
+  m.innerHTML=`<div class="empty"><b>This is taking longer than usual</b>${mismatch?mismatch+" ":""}Try a hard refresh: <b>Cmd+Shift+R</b> (Mac) or <b>Ctrl+Shift+R</b> (Windows). On a phone, close the tab and open the link again.<br>If you just uploaded a new version to GitHub, wait 2–3 minutes for it to go live.${window.__bootErrors.length?`<br><br><code style="font-size:12px">${window.__bootErrors.slice(0,3).map(x=>String(x).replace(/[<>&]/g,"")).join("<br>")}</code>`:""}<br><br><button class="btn pri" onclick="location.reload()">Reload</button></div>`; },15000);
+</script>
 </body>
 </html>

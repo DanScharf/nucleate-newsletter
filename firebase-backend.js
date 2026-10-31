@@ -76,7 +76,7 @@ onAuthStateChanged(auth, async u => {
   document.getElementById("btnSignOut").hidden = false;
   showAuth({ kind: "loading" });
   // Access check: rules allow only listed emails. A denied read means this account isn't on the list.
-  try { await getDoc(doc(fs, "meta/settings")); }
+  try { await Promise.race([getDoc(doc(fs, "meta/settings")), new Promise((_, rej) => setTimeout(() => rej(Object.assign(new Error("The database didn't answer within 20 seconds. Check your internet connection and reload."), { code: "timeout" })), 20000))]); }
   catch (e) { if (e && e.code === "permission-denied") return showAuth({ kind: "denied", email: u.email }); return showAuth({ kind: "error", msg: (e && e.message) || "Unknown error" }); }
   try { await setDoc(doc(fs, "users", u.uid), { name: u.displayName || "", email: u.email || "", photo: u.photoURL || "", lastSeen: Date.now() }, { merge: true }); } catch (e) { }
   onSnapshot(collection(fs, "users"), s => {
