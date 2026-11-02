@@ -120,7 +120,7 @@ async function purgeOld(){ if(S.purged||!isAdmin()) return; S.purged=true; const
 
 const whenExists = (col,id) => new Promise(res=>{ let n=0; const tick=()=>{ if(S[col].some(x=>x.id===id)||++n>40) return res(); setTimeout(tick,50); }; tick(); });
 // ───────── render loop ─────────
-window.__APP_BUILD="202611011500";
+window.__APP_BUILD="202611021000";
 let raf=0, renderFails=0; function render(){ cancelAnimationFrame(raf); raf=requestAnimationFrame(()=>{ try{ doRender(); renderFails=0; }catch(err){ console.error(err); if(++renderFails<3) return; const m=$("#main"); if(m) m.innerHTML=`<div class="empty"><b>Something went wrong showing this page</b>Try a hard refresh (Cmd+Shift+R on Mac, Ctrl+Shift+R on Windows). If it keeps happening, send a screenshot of this message to Dan.<br><br><code style="font-size:12px">${esc(String(err&&err.message||err))}</code><br><br><button class="btn pri" onclick="location.reload()">Reload</button></div>`; } }); }
 const NAV=[["home","Home",[]],["news","Newsletter",[["board","Pipeline"],["issue","This issue"],["sources","Sources"],["inbox","Suggestions"],["archive","Archive"]]],["events","Events",[["events","Event planner"],["calendar","Calendar"]]],["team","Team",[["tasks","Tasks"],["contacts","Contacts"],["team","People & access"]]]];
 const sectionOf = v => v==="home"?"home":["board","issue","sources","inbox","archive","places"].includes(v)?"news":["events","event","calendar"].includes(v)?"events":["tasks","contacts","team"].includes(v)?"team":"";
@@ -256,10 +256,9 @@ function vHome(){
   const myTasks=A("tasks").filter(t=>!t.done&&tAss(t).includes(S.meId)).sort((a,b)=>(a.due||"9")<(b.due||"9")?-1:1);
   const sugg=A("suggestions"); const fy=forYou(); const hello=S.meId? firstName(S.meId) : "";
   return `<section class="hero"><canvas class="dna" aria-hidden="true"></canvas><div class="hx">
-      <div class="kicker">ISSUE #${st.nextIssue} · IN PROGRESS</div>
       <h1>Nucleate <span class="dash">–</span> Technion Branch</h1>
       <p>${hello?`Hi ${esc(hello)}. `:""}Collect what's happening in biotech around campus, plan our events, and send the weekly digest to the group.</p>
-      <div class="acts">${S.canWrite?`<button class="btn pri" data-act="new">+ Add item</button><button class="btn" data-act="new-meeting">+ Meeting</button><button class="btn" data-act="new-plan">+ Event idea</button>`:""}<a class="btn" href="#issue">Open this issue</a></div>
+      ${S.canWrite?`<div class="acts"><button class="btn" data-act="new-plan">+ Event</button><button class="btn" data-act="new-meeting">+ Meeting</button><button class="btn" data-act="new">+ Newsletter item</button></div>`:""}
     </div></section>
     <div class="tiles">
       <a class="tile" href="#tasks"><span class="v">${myTasks.length}</span><span class="l">${myTasks.length===1?"open task for you":"open tasks for you"}</span></a>
@@ -277,9 +276,13 @@ function vHome(){
           ${up.length?`<div class="agenda">${up.slice(0,7).map(agendaRow).join("")}</div>`:`<div class="colempty">Nothing dated in the next two weeks.</div>`}</div>
       </div>
       <div style="display:flex;flex-direction:column;gap:16px;min-width:0">
-        ${S.canWrite?`<form class="panel" id="quickForm"><div class="panel-h"><h3>Quick add</h3><span class="hint">${A("items").filter(i=>(i.status||"found")==="found").length} waiting in Found</span></div>
-          <div class="quick"><input id="quickUrl" type="url" placeholder="Paste a link…" aria-label="Link"><button class="btn pri" type="submit">Add</button></div>
-          <div class="hint" style="margin-top:6px">The title fills in from the page when possible.</div></form>`:""}
+        ${S.canWrite?`<form class="panel" id="quickEvent"><div class="panel-h"><h3>Quick add · Event</h3><a href="#events" class="hint">${A("plans").filter(p=>p.stage!=="done").length} being planned →</a></div>
+          <div class="quick"><input id="qeTitle" dir="auto" placeholder="Event name" aria-label="Event name"><button class="btn" type="submit">Add</button></div>
+          <div class="quick" style="margin-top:8px"><input id="qeDate" type="date" aria-label="Date"><input id="qeTime" type="time" aria-label="Start time" style="flex:0 0 130px"></div>
+          <div class="hint" style="margin-top:6px">Opens the event planner with these filled in, so you can pick a template.</div></form>
+        <form class="panel" id="quickForm"><div class="panel-h"><h3>Quick add · Newsletter</h3><a href="#board" class="hint">${A("items").filter(i=>(i.status||"found")==="found").length} waiting in Found →</a></div>
+          <div class="quick"><input id="quickUrl" type="url" placeholder="Paste a link…" aria-label="Link"><button class="btn" type="submit">Add</button></div>
+          <div class="hint" style="margin-top:6px">Goes to Found on the pipeline. The title fills in from the page when possible.</div></form>`:""}
         ${sugg.length?`<div class="panel"><div class="panel-h"><h3>From students</h3><a href="#inbox" class="hint">Review ${sugg.length} →</a></div>${sugg.slice(0,3).map(suggRow).join("")}</div>`:""}
         <div class="panel"><div class="panel-h"><h3>Latest activity</h3><a href="#team" class="hint">Team →</a></div>
           ${S.activity.length?`<div class="feed">${S.activity.slice(0,6).map(actRow).join("")}</div>`:`<div class="colempty">Nothing yet.</div>`}</div>
@@ -682,15 +685,15 @@ const planTeam = p => { const s=new Set([p.createdBy,...pLeads(p)].filter(Boolea
 // Who a new task in an area goes to: that area's role people, or the event leads.
 function roleFor(p, section){ const k=SECTION_ROLE[section]||"lead"; const u=rUids((p.roles||{})[k]); return u.length?u:pLeads(p); }
 
-function openPlan(id, date){ if(id){ location.hash="event-"+id; return; }
-  openD("plan",{id:null,draft:{title:"",template:"workshop",date:date||"",time:TEMPLATES.workshop.start,location:""}}); }
+function openPlan(id, date, pre){ if(id){ location.hash="event-"+id; return; } pre=pre||{};
+  openD("plan",{id:null,draft:{title:pre.title||"",template:"workshop",date:date||"",time:pre.time||TEMPLATES.workshop.start,auto:pre.time?"":TEMPLATES.workshop.start,location:""}}); }
 function drawPlan(key, live){ if(live) return; const d=S.drawer.draft;
   return shell(key,"New event",`<div class="dh"><h2>Plan a new event</h2><button class="btn ghost" data-act="close" aria-label="Close">✕</button></div>
     <form class="box" id="planForm" novalidate>
       <label class="f"><span class="lh">Event name<span class="req">*</span></span><input id="pTitle" dir="auto" value="${esc(d.title)}" placeholder="Founders panel · Lab tour at BioHub" data-autofocus></label>
       <div class="f" style="display:flex;flex-direction:column;gap:6px;font-size:12.5px;color:var(--muted);font-weight:500">Start from a template
         <div class="tpl">${Object.entries(TEMPLATES).map(([k,t])=>`<input type="radio" name="pTpl" id="tp-${k}" value="${k}" ${d.template===k?"checked":""}><label for="tp-${k}"><span class="ic">${t.icon}</span><b>${esc(t.label)}</b><span>${esc(t.desc)}${t.tasks.length?` · ${t.tasks.length} tasks`:""}</span></label>`).join("")}</div></div>
-      <div class="grid2"><label class="f">Date<input id="pDate" type="date" value="${esc(d.date)}"></label><label class="f">Start time<input id="pTime" type="time" value="${esc(d.time)}" data-auto="${esc(d.time)}"></label></div>
+      <div class="grid2"><label class="f">Date<input id="pDate" type="date" value="${esc(d.date)}"></label><label class="f">Start time<input id="pTime" type="time" value="${esc(d.time)}" data-auto="${esc(d.auto??d.time)}"></label></div>
       <label class="f">Where<input id="pLoc" dir="auto" value="${esc(d.location)}" placeholder="Building / room · or TBD"></label>
       <div class="hint">With a date, template tasks get due dates counted back from the event (e.g. "Book the room" 5 weeks before). The itinerary is built around the start time, e.g. set-up 30 minutes before doors open.</div>
       <div id="pErr"></div>
@@ -1165,6 +1168,7 @@ document.addEventListener("submit", async e=>{
   else if(id==="runForm"){ const p=S.plans.find(x=>x.id===S.eventId); const what=$("#runWhat").value.trim(); if(!what) return; if(await evUpdate(p,{run:{[nid("r")]:{time:$("#runTime").value,what,whos:pickVal(f.querySelector(".ppick")),who:pickVal(f.querySelector(".ppick"))[0]||"",at:Date.now()}}})){ f.reset(); const b=f.querySelector(".ppick"); pickSet(b,[]); if(b) delete b.dataset.dirty; } }
   else if(id==="reviewForm"){ const p=S.plans.find(x=>x.id===S.eventId); const review={registered:$("#rReg").value,attendance:$("#rAtt").value,rating:$("#rRate").value,wentWell:$("#rWell").value.trim(),improve:$("#rImprove").value.trim(),photos:$("#rPhotos").value.trim()};
     if(await evUpdate(p,{review},"wrote the review for")){ f.querySelectorAll("input,textarea").forEach(el=>el.defaultValue=el.value); toast("Review saved."); } }
+  else if(id==="quickEvent"){ const t=$("#qeTitle").value.trim(), d=$("#qeDate").value, tm=$("#qeTime").value; f.reset(); openPlan(null,d,{title:t,time:tm}); }
   else if(id==="quickForm"){ const u=$("#quickUrl").value.trim(); if(!u) return; $("#quickUrl").value=""; openItem(null,{url:/^https?:\/\//i.test(u)?u:"https://"+u}); }
   else if(id==="ckForm"){ const inp=$("#ckText"); const text=inp.value.trim(); if(!text) return; const p=S.plans.find(x=>x.id===S.eventId); const k=nid("c");
     inp.value=""; inp.defaultValue=""; await evUpdate(p,{checklist:{[k]:{text,done:false,at:Date.now()}}}); }
