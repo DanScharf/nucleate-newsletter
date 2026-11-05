@@ -335,6 +335,17 @@ b.men{color:var(--accent)}
 .menu button:hover,.menu a:hover,.menu button:focus-visible,.menu a:focus-visible{background:var(--sunk)}
 .menu .mi{width:20px;text-align:center}
 .menu .who{padding:8px 10px 10px;border-bottom:1px solid var(--line);margin-bottom:4px;color:var(--muted)}
+.onlinebtn{display:inline-flex;align-items:center;gap:7px;background:transparent;border:1px solid rgba(255,255,255,.18);color:var(--band-ink);border-radius:999px;padding:4px 12px 4px 6px;cursor:pointer;font:inherit;font-size:13.5px}
+.onlinebtn:hover{border-color:rgba(255,255,255,.4)}
+.oavs{display:inline-flex}.oavs:empty{display:none}
+.oav{display:inline-flex;margin-left:-7px;border-radius:50%;box-shadow:0 0 0 2px var(--band)}.oav:first-child{margin-left:0}
+.oav .av{width:24px;height:24px}.av.ini{display:inline-grid;place-items:center;font-size:12px;font-weight:600;color:var(--ink)}
+.omore{margin-left:4px;font-size:12px;opacity:.8}
+.odot{width:8px;height:8px;border-radius:50%;background:#3BD18A;box-shadow:0 0 0 3px rgba(59,209,138,.25)}
+.onlinebtn.none .odot{background:#7F8FA3;box-shadow:none}
+.orow{display:flex;align-items:center;gap:10px;padding:7px 10px}.orow .grow{flex:1}
+.pdot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--line);flex:none}.pdot.on{background:#2FB879;box-shadow:0 0 0 3px rgba(47,184,121,.2)}
+@media (max-width:760px){.onlinebtn .un{display:none}.onlinebtn{padding:4px 8px 4px 6px}}
 .userbtn{display:inline-flex;align-items:center;gap:8px;background:transparent;border:1px solid rgba(255,255,255,.18);color:var(--band-ink);border-radius:999px;padding:4px 10px 4px 4px;cursor:pointer;font:inherit}
 .userbtn:hover{border-color:rgba(255,255,255,.4)}
 @media (max-width:760px){.mast{flex-wrap:wrap}.mainnav{order:5;flex-basis:100%;margin:6px -4px 0}.mainnav a{padding:7px 12px;font-size:14px}.userbtn .un{display:none}.brand .n2{display:none}}
@@ -376,6 +387,10 @@ a.segbtn[aria-selected=true]{background:var(--surface);color:var(--ink);box-shad
           <button role="menuitem" data-act="new-task"><span class="mi">✓</span>Task</button>
           <button role="menuitem" data-act="new-contact"><span class="mi">👤</span>Contact</button>
         </div>
+      </div>
+      <div class="menuwrap">
+        <button class="onlinebtn" id="onlineBtn" data-menu="online" aria-haspopup="true" aria-expanded="false" hidden><span class="oavs" id="onlineAvs"></span><span class="odot" aria-hidden="true"></span><span id="onlineLbl" class="un"></span></button>
+        <div class="menu right" id="menu-online" role="menu" hidden></div>
       </div>
       <div class="menuwrap">
         <button class="userbtn" id="btnUser" data-menu="user" aria-haspopup="true" aria-expanded="false" hidden><span id="userAv"></span><span id="userName" class="un"></span><span aria-hidden="true">▾</span></button>
@@ -433,11 +448,11 @@ a.segbtn[aria-selected=true]{background:var(--surface);color:var(--ink);box-shad
 })();
 </script>
 
-<script src="app.js?v=202611021000"></script>
-<script type="module" src="./firebase-backend.js?v=202611021000"></script>
+<script src="app.js?v=202611051000"></script>
+<script type="module" src="./firebase-backend.js?v=202611051000"></script>
 <script>
 // Safety net: if the site hasn't started after 15 seconds, explain what to do instead of spinning forever.
-window.__SITE_BUILD="202611021000";
+window.__SITE_BUILD="202611051000";
 window.__bootErrors=[]; window.addEventListener("error",e=>window.__bootErrors.push(e.message||String(e.error||"")));
 setTimeout(()=>{ const m=document.getElementById("main"); if(!m||!/Loading the site|Opening the desk/.test(m.textContent)) return;
   const mismatch=!window.__startApp?"The site's files didn't load (app.js is missing or out of date).":(window.__APP_BUILD&&window.__APP_BUILD!==window.__SITE_BUILD)?"Your browser has a mix of old and new files.":"";

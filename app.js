@@ -35,7 +35,10 @@ const S = {items:[],sources:[],activity:[],issues:[],meetings:[],tasks:[],plans:
   view:"home",f:{q:"",type:"",who:"",tag:""},cf:{q:"",kind:""},tf:"mine",drawer:null,confirmRemove:null,
   cal:{y:now0.getFullYear(),m:now0.getMonth(),sel:null}};
 const $ = s => document.querySelector(s);
-const A = k => S[k].filter(x=>!x.deleted);
+const A = k => k==="tasks"? S.tasks.filter(t=>!t.deleted&&!orphan(t)) : S[k].filter(x=>!x.deleted);
+// A task belongs to an event plan or a calendar entry; once that's deleted, the task is hidden everywhere too.
+function parentOf(t){ return t.planId? ["plans",t.planId] : t.meetingId? ["meetings",t.meetingId] : null; }
+function orphan(t){ const pr=parentOf(t); if(!pr) return false; const [c,id]=pr; if(!(S.loaded||{})[c]) return false; const x=S[c].find(d=>d.id===id); return !x||!!x.deleted; }
 const esc = s => String(s ?? "").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const safeUrl = u => /^https?:\/\//i.test(u||"") ? u : "";
 const normUrl = u => (u||"").trim().toLowerCase().replace(/^https?:\/\/(www\.)?/,"").replace(/[?#].*$/,"").replace(/\/+$/,"");
@@ -57,6 +60,14 @@ const settings = () => Object.assign({name:"Nucleate Technion Weekly",footer:"Fo
 const nameOf = id => { if(!id) return "Someone"; const p=S.profiles[id]; return (p&&p.name) || (id===S.meId ? "You" : "Teammate"); };
 const firstName = id => nameOf(id).split(" ")[0];
 const avOf = id => (S.profiles[id]&&S.profiles[id].avatarUrl) || "";
+// Who's online: anyone whose site sent a heartbeat in the last 3 minutes.
+const ONLINE_MS = 3*60000;
+const seenAt = id => ((window.__presence||{})[id]||{}).seen||0;
+const leftAt = id => ((window.__presence||{})[id]||{}).left||0;
+const isOnline = id => id===S.meId || Date.now()-seenAt(id) < ONLINE_MS;
+const lastSeenAt = id => Math.max(seenAt(id), leftAt(id));
+const onlineIds = () => { const team=S.known.filter(id=>id!==S.meId); return team.filter(isOnline).sort((a,b)=>nameOf(a).localeCompare(nameOf(b))); };
+const presDot = id => `<span class="pdot ${isOnline(id)?"on":""}" title="${isOnline(id)?"Online now":lastSeenAt(id)?"Last seen "+esc(agoPhrase(lastSeenAt(id))):"Not seen yet"}"></span>`;
 const avImg = id => avOf(id) ? `<img class="av" src="${esc(avOf(id))}" alt="" referrerpolicy="no-referrer">` : "";
 const people = () => { const s=new Set(); if(S.meId) s.add(S.meId); S.known.forEach(id=>s.add(id)); S.items.forEach(i=>{i.addedBy&&s.add(i.addedBy); iOwners(i).forEach(o=>s.add(o));}); return [...s]; };
 const peopleOpts = (sel, blank) => (blank?`<option value="">${esc(blank)}</option>`:"")+people().map(id=>`<option value="${esc(id)}" ${sel===id?"selected":""}>${esc(nameOf(id))}${id===S.meId?" (you)":""}</option>`).join("");
@@ -112,15 +123,23 @@ async function upd(col,id,data){ try{ await S.db.collection(col).doc(id).update(
 async function add(col,data){ try{ const r=await S.db.collection(col).add(data); return r.id; }catch(e){ writeErr(e); return null; } }
 async function saveItem(id, data, isNew){ try{ const ref=S.db.collection("items").doc(id||undefined); if(isNew) await ref.set(data); else await ref.update(data); return ref.id; }catch(e){ writeErr(e); throw e; } }
 async function saveSettings(patch){ const ref=S.db.doc("meta/settings"); try{ if(S.settings) await ref.update(patch); else await ref.set(Object.assign(settings(),patch)); }catch(e){ writeErr(e); } }
+const childTasks = (col,id) => (col==="plans"||col==="meetings")? S.tasks.filter(t=>{ const pr=parentOf(t); return pr&&pr[0]===col&&pr[1]===id; }) : [];
+async function trashChildren(col,id){ const now=Date.now(); let n=0; for(const t of childTasks(col,id).filter(t=>!t.deleted)){ try{ await S.db.collection("tasks").doc(t.id).update({deleted:true,deletedAt:now,deletedBy:S.meId,deletedWith:col+":"+id,...stamp()}); n++; }catch(e){} } return n; }
 async function trash(col,id){ const x=S[col].find(d=>d.id===id); if(!x) return; const t=titleOf(col,x);
-  if(await upd(col,id,{deleted:true,deletedAt:Date.now(),deletedBy:S.meId,...stamp()})){ logAct("moved to Trash:",t); closeDrawer(); toast("Moved to Trash.",{label:"Undo",fn:()=>restore(col,id)}); } }
-async function restore(col,id){ const x=S[col].find(d=>d.id===id); if(await upd(col,id,{deleted:false,deletedAt:null,deletedBy:null,...stamp()})){ logAct("restored",x?titleOf(col,x):""); toast("Restored."); } }
+  if(await upd(col,id,{deleted:true,deletedAt:Date.now(),deletedBy:S.meId,...stamp()})){ const n=await trashChildren(col,id); logAct("moved to Trash:",t); closeDrawer(); toast(n?`Moved to Trash with ${plural(n,"task")}.`:"Moved to Trash.",{label:"Undo",fn:()=>restore(col,id)}); } }
+async function restore(col,id){ const x=S[col].find(d=>d.id===id); if(await upd(col,id,{deleted:false,deletedAt:null,deletedBy:null,...stamp()})){
+    for(const t of childTasks(col,id).filter(t=>t.deleted&&t.deletedWith===col+":"+id)){ try{ await S.db.collection("tasks").doc(t.id).update({deleted:false,deletedAt:null,deletedBy:null,deletedWith:null,...stamp()}); }catch(e){} }
+    logAct("restored",x?titleOf(col,x):""); toast("Restored."); } }
+async function purge(col,id){ try{ for(const t of childTasks(col,id)){ try{ await S.db.collection("tasks").doc(t.id).delete(); }catch(e){} } await S.db.collection(col).doc(id).delete(); toast("Deleted for good."); }catch(er){ writeErr(er); } }
+// Tasks left behind by events or calendar entries deleted before this fix go to the Trash with them.
+async function sweepOrphans(){ if(S.swept||!S.canWrite||!["tasks","plans","meetings"].every(c=>(S.loaded||{})[c])) return; S.swept=true;
+  for(const t of S.tasks.filter(t=>!t.deleted&&orphan(t))){ const [c,id]=parentOf(t); const par=S[c].find(d=>d.id===id); try{ await S.db.collection("tasks").doc(t.id).update({deleted:true,deletedAt:(par&&par.deletedAt)||Date.now(),deletedBy:(par&&par.deletedBy)||S.meId,deletedWith:c+":"+id,...stamp()}); }catch(e){} } }
 async function purgeOld(){ if(S.purged||!isAdmin()) return; S.purged=true; const cut=Date.now()-30*864e5;
   for(const col of Object.keys(TRASHABLE)) for(const x of S[col]) if(x.deleted&&x.deletedAt&&x.deletedAt<cut){ try{ await S.db.collection(col).doc(x.id).delete(); }catch{} } }
 
 const whenExists = (col,id) => new Promise(res=>{ let n=0; const tick=()=>{ if(S[col].some(x=>x.id===id)||++n>40) return res(); setTimeout(tick,50); }; tick(); });
 // ───────── render loop ─────────
-window.__APP_BUILD="202611021000";
+window.__APP_BUILD="202611051000";
 let raf=0, renderFails=0; function render(){ cancelAnimationFrame(raf); raf=requestAnimationFrame(()=>{ try{ doRender(); renderFails=0; }catch(err){ console.error(err); if(++renderFails<3) return; const m=$("#main"); if(m) m.innerHTML=`<div class="empty"><b>Something went wrong showing this page</b>Try a hard refresh (Cmd+Shift+R on Mac, Ctrl+Shift+R on Windows). If it keeps happening, send a screenshot of this message to Dan.<br><br><code style="font-size:12px">${esc(String(err&&err.message||err))}</code><br><br><button class="btn pri" onclick="location.reload()">Reload</button></div>`; } }); }
 const NAV=[["home","Home",[]],["news","Newsletter",[["board","Pipeline"],["issue","This issue"],["sources","Sources"],["inbox","Suggestions"],["archive","Archive"]]],["events","Events",[["events","Event planner"],["calendar","Calendar"]]],["team","Team",[["tasks","Tasks"],["contacts","Contacts"],["team","People & access"]]]];
 const sectionOf = v => v==="home"?"home":["board","issue","sources","inbox","archive","places"].includes(v)?"news":["events","event","calendar"].includes(v)?"events":["tasks","contacts","team"].includes(v)?"team":"";
@@ -132,6 +151,12 @@ function doRender(){
   const counts = {board:A("items").filter(i=>i.status!=="archived").length, calendar:upcoming(30).length, places:A("items").filter(i=>i.status!=="archived"&&i.location).length, issue:A("items").filter(i=>i.status==="issue").length,
     sources:S.sources.length, archive:S.issues.length, tasks:myOpen, events:A("plans").filter(p=>p.stage!=="done").length, contacts:A("contacts").length, inbox:A("suggestions").length};
   const sec=sectionOf(S.view); const badge={news:A("suggestions").length,events:upcoming(7).filter(x=>x.kind!=="item").length,team:myOpen};
+  if($("#onlineBtn")){ const on=onlineIds(); $("#onlineBtn").hidden=!S.db||!S.known.length;
+    $("#onlineAvs").innerHTML = on.length? on.slice(0,4).map(id=>`<span class="oav">${avImg(id)||`<span class="av ini">${esc(nameOf(id)[0]||"?")}</span>`}</span>`).join("")+(on.length>4?`<span class="omore">+${on.length-4}</span>`:"") : "";
+    $("#onlineLbl").textContent = on.length? `${on.length} online` : "Only you"; $("#onlineBtn").classList.toggle("none",!on.length);
+    $("#onlineBtn").setAttribute("aria-label", on.length? `Online now: ${on.map(nameOf).join(", ")}` : "Nobody else is online");
+    const others=S.known.filter(id=>id!==S.meId).sort((a,b)=>(isOnline(b)-isOnline(a))||(lastSeenAt(b)-lastSeenAt(a)));
+    $("#menu-online").innerHTML = `<div class="who">Who's on the site</div>`+[S.meId,...others].filter(Boolean).map(id=>`<div class="orow">${avImg(id)}<span class="grow">${esc(nameOf(id))}${id===S.meId?" (you)":""}</span>${presDot(id)}<span class="hint">${isOnline(id)?"online":lastSeenAt(id)?esc(agoPhrase(lastSeenAt(id))):"not yet"}</span></div>`).join(""); }
   if($("#mainnav")) $("#mainnav").innerHTML = S.db ? NAV.map(([k,l,subs])=>`<a href="#${(S.lastSub&&S.lastSub[k])||(subs[0]?subs[0][0]:"home")}" ${sec===k?'aria-current="page"':""}>${l}${badge[k]?`<span class="n">${badge[k]}</span>`:""}</a>`).join("") : "";
   const subs=(NAV.find(n=>n[0]===sec)||[])[2]||[];
   if($("#tabs")) $("#tabs").innerHTML = S.db&&subs.length ? subs.map(([k,l])=>`<a href="#${k}" ${S.view===k||(S.view==="event"&&k==="events")||(S.view==="places"&&k==="board")?'aria-current="page"':""}>${l}${counts[k]?`<span class="n">${counts[k]}</span>`:""}</a>`).join("") : "";
@@ -425,7 +450,7 @@ function vTeam(){
   const streak=id=>{ const weeks=new Set(A("items").filter(i=>i.addedBy===id&&i.createdAt).map(i=>weekStart(i.createdAt))); let w=weeks.has(ws)?ws:ws-7*864e5, n=0; while(weeks.has(w)){n++; w=weekStart(w-864e5);} return n; };
   const cards=ids.map(id=>{ const mine=A("items").filter(i=>i.addedBy===id); const wk=mine.filter(i=>(i.createdAt||0)>=ws).length; const tasks=A("tasks").filter(t=>tAss(t).includes(id)&&!t.done).length;
     const owns=Object.entries(st.owners||{}).filter(([k,v])=>arr(v).includes(id)).map(([k])=>secName(k)).filter(Boolean); const p=S.profiles[id]; const role=p&&p.email?roleOf(String(p.email).toLowerCase()):"";
-    return `<div class="panel person"><div class="hd">${avImg(id)}<div><h3>${esc(nameOf(id))} ${role?`<span class="chip">${role}</span>`:""}</h3><div class="hint">${owns.length?"Owns "+owns.map(esc).join(", "):"No newsletter sections"}</div></div></div>
+    return `<div class="panel person"><div class="hd">${avImg(id)}<div><h3>${esc(nameOf(id))} ${role?`<span class="chip">${role}</span>`:""}</h3><div class="hint" style="display:flex;align-items:center;gap:6px">${presDot(id)}${isOnline(id)?"Online now":lastSeenAt(id)?"Last seen "+esc(agoPhrase(lastSeenAt(id))):"Hasn't signed in yet"}</div><div class="hint">${owns.length?"Owns "+owns.map(esc).join(", "):"No newsletter sections"}</div></div></div>
       <div class="stats"><div class="stat"><div class="v">${wk}</div><div class="l">added this week</div></div><div class="stat"><div class="v">${tasks}</div><div class="l">open tasks</div></div><div class="stat"><div class="v">${streak(id)}🔥</div><div class="l">week streak</div></div></div></div>`; }).join("");
   const feed=S.activity.length? `<div class="feed">${S.activity.map(actRow).join("")}</div>` : `<div class="colempty">Everything the team adds, edits, votes on or sends shows up here.</div>`;
   return `<h2>Team</h2><p class="sub">Who's doing what this week. Weeks run Sunday to Saturday.</p><div class="team">${cards}</div>${accessPanel()}<div class="panel"><div class="panel-h"><h3>Activity</h3></div>${feed}</div>`;
@@ -455,12 +480,13 @@ function vArchive(){
     <div class="bubble" dir="auto" style="max-height:none">${waHtml(is.text||"")}</div><div><button class="btn sm" data-copyissue="${esc(is.id)}">Copy text</button></div></details>`).join("")}</div>`;
 }
 function vTrash(){
-  const rows=[]; for(const col of Object.keys(TRASHABLE)) S[col].filter(x=>x.deleted).forEach(x=>rows.push({col,x}));
+  const rows=[]; for(const col of Object.keys(TRASHABLE)) S[col].filter(x=>x.deleted&&!(col==="tasks"&&x.deletedWith&&S[x.deletedWith.split(":")[0]]&&S[x.deletedWith.split(":")[0]].some(d=>d.id===x.deletedWith.split(":")[1]&&d.deleted))).forEach(x=>rows.push({col,x}));
+  const withN=(col,x)=>{ const n=S.tasks.filter(t=>t.deleted&&t.deletedWith===col+":"+x.id).length; return n?` · with ${plural(n,"task")}`:""; };
   rows.sort((a,b)=>(b.x.deletedAt||0)-(a.x.deletedAt||0));
   const left=x=>Math.max(0,30-Math.floor((Date.now()-(x.deletedAt||Date.now()))/864e5));
   const mayPurge=(col,x)=> isAdmin() || (col==="items"?x.addedBy:col==="plans"||col==="contacts"||col==="tasks"||col==="meetings"?x.createdBy:null)===S.meId;
   return `<h2>Trash</h2><p class="sub">Deleted things stay here for 30 days, then they're removed for good. Anyone can see the Trash; restoring follows the same rules as editing.</p>
-    ${rows.length?`<div class="list">${rows.map(({col,x})=>`<div class="row"><div class="grow"><div class="t" dir="auto">${esc(titleOf(col,x))}</div><div class="s">${esc(TRASHABLE[col])} · deleted by ${esc(nameOf(x.deletedBy))} ${x.deletedAt?agoPhrase(x.deletedAt):""} · ${plural(left(x),"day")} left</div></div>
+    ${rows.length?`<div class="list">${rows.map(({col,x})=>`<div class="row"><div class="grow"><div class="t" dir="auto">${esc(titleOf(col,x))}</div><div class="s">${esc(TRASHABLE[col])}${withN(col,x)} · deleted by ${esc(nameOf(x.deletedBy))} ${x.deletedAt?agoPhrase(x.deletedAt):""} · ${plural(left(x),"day")} left</div></div>
       ${S.canWrite?`<button class="btn sm" data-restore="${col}:${esc(x.id)}">Restore</button>`:""}${mayPurge(col,x)?`<button class="btn sm ghost danger" data-purge="${col}:${esc(x.id)}">Delete forever</button>`:""}</div>`).join("")}</div>`
       :`<div class="empty"><b>Trash is empty</b>Deleted items, tasks, meetings, event plans and contacts land here first.</div>`}`;
 }
@@ -589,7 +615,7 @@ function drawMeeting(key, live){
       ${ser?`<div id="skipList">${skippedHtml(mt)}</div>`:""}
       <div id="mErr"></div>
       <div class="toolbar" style="margin:0">${ro?"":`<button class="btn pri" type="submit">${D.id?(ser?"Save whole series":"Save changes"):"Add to calendar"}</button>`}${mt&&!ser?`<a class="btn" target="_blank" rel="noopener" href="${esc(gcalUrl({title:mt.title,date:mt.date,time:mt.time,endTime:mt.endTime,location:mt.location,details:mt.agenda}))}">+ Google Calendar</a>`:""}<span style="flex:1"></span>${mt&&!ro?`<button type="button" class="btn ghost danger" data-act="del">${ser?"Delete whole series":"Delete"}</button>`:""}</div>
-      ${ro?"":delBlock(ser?"Move the whole series (every date) to the Trash?":"Move this entry to the Trash?")}
+      ${ro?"":delBlock(ser?"Move the whole series (every date) and its action items to the Trash?":"Move this entry and its action items to the Trash?")}
     </form>`;
   const occBox = ser? `<form class="box" id="occForm" novalidate><h3>This date only</h3>
       ${o.moved?`<div class="hint">Moved from ${esc(fmtDW(o.key))}.</div>`:""}
@@ -915,7 +941,7 @@ function evOverview(p,ed,ts){ const dis=ed?"":"disabled"; const g=live(p.guests)
         <label class="f">Registration / info link<input id="eLink" type="url" value="${esc(p.link||"")}" placeholder="https://…" ${dis}></label>
         <label class="f">Description<textarea id="eDesc" rows="4" dir="auto" placeholder="What it is, who it's for, why come. This becomes the newsletter blurb." ${dis}>${esc(p.description||"")}</textarea></label>
         ${ed?`<div class="toolbar" style="margin:0"><button class="btn pri" type="submit">Save details</button>${p.date?`<a class="btn" target="_blank" rel="noopener" href="${esc(gcalUrl({title:p.title,date:p.date,time:p.time,endTime:p.endTime,location:p.location,details:p.link}))}">+ Google Calendar</a>`:""}${!p.itemId?`<button type="button" class="btn" data-act="plan-to-news">➜ Add to newsletter</button>`:`<a class="btn" href="#" data-open="${esc(p.itemId)}">Newsletter item</a>`}<span style="flex:1"></span><button type="button" class="btn ghost danger" data-act="ev-del">Delete event</button></div>
-        ${S.evConfirmDel?`<div class="confirm">Move this event and its plan to the Trash? Its tasks stay in Tasks. <button type="button" class="btn sm danger" data-act="ev-del-yes">Move to Trash</button><button type="button" class="btn sm" data-act="ev-del-no">Keep</button></div>`:""}`:""}
+        ${S.evConfirmDel?`<div class="confirm">Move this event, its plan and its tasks to the Trash? <button type="button" class="btn sm danger" data-act="ev-del-yes">Move to Trash</button><button type="button" class="btn sm" data-act="ev-del-no">Keep</button></div>`:""}`:""}
       </div></form>
       <div style="display:flex;flex-direction:column;gap:16px;min-width:0">
         <div class="panel"><div class="panel-h"><h3>Next up</h3><a href="#" class="hint" data-etab="tasks">All tasks →</a></div>${next.length?`<div class="tasks">${next.map(t=>taskRow(t,true)).join("")}</div>`:`<div class="colempty">${ts.length?"Everything's done.":"No tasks yet."}</div>`}</div>
@@ -1093,7 +1119,7 @@ document.addEventListener("click", async e=>{
   if(ds.ckdel){ evUpdate(S.plans.find(x=>x.id===S.eventId),{checklist:{[ds.ckdel]:null}}); return; }
   if(ds.mention){ const inp=$("#"+ds.target); if(inp){ const n="@"+firstName(ds.mention)+" "; inp.value=(inp.value&&!/\s$/.test(inp.value)?inp.value+" ":inp.value)+n; inp.focus(); } return; }
   if(ds.restore){ const [c,id]=ds.restore.split(":"); restore(c,id); return; }
-  if(ds.purge){ const [c,id]=ds.purge.split(":"); try{ await S.db.collection(c).doc(id).delete(); toast("Deleted for good."); }catch(er){ writeErr(er); } return; }
+  if(ds.purge){ const [c,id]=ds.purge.split(":"); purge(c,id); return; }
   if(ds.suggOk){ acceptSuggestion(ds.suggOk); return; }
   if(ds.suggNo){ try{ await S.db.collection("suggestions").doc(ds.suggNo).delete(); toast("Dismissed."); }catch(er){ writeErr(er); } return; }
   if(ds.cal!==undefined){ const n=Number(ds.cal); if(n===0){ const d=new Date(); S.cal.y=d.getFullYear(); S.cal.m=d.getMonth(); S.cal.sel=todayS(); } else { const d=new Date(S.cal.y,S.cal.m+n,1); S.cal.y=d.getFullYear(); S.cal.m=d.getMonth(); } render(); return; }
@@ -1234,6 +1260,8 @@ const ALLV=["home","inbox","board","calendar","tasks","events","contacts","place
 function route(){ const h=location.hash.replace("#",""); S.lastSub=S.lastSub||{}; if(h.startsWith("event-")){ if(S.eventId!==h.slice(6)){ S.etab="overview"; S.evConfirmDel=false; } S.view="event"; S.eventId=h.slice(6); window.scrollTo(0,0); } else S.view=ALLV.includes(h)?h:"home"; const sc=sectionOf(S.view); if(sc&&sc!=="home") S.lastSub[sc]=S.view==="event"?"events":S.view==="places"?"board":S.view; closeMenus(); render(); }
 window.addEventListener("hashchange",route);
 window.addEventListener("people-changed",e=>{ S.known=e.detail||[]; S.profiles={}; render(); });
+window.addEventListener("presence-changed",()=>render());
+setInterval(()=>{ if(S.db) render(); },60000);   // so people drop off "online" when they leave
 async function boot(){
   route();
   if(!window.claude||!window.claude.use){ render(); return; }
@@ -1243,7 +1271,7 @@ async function boot(){
   if(!S.meId) S.canWrite=false;
   if(!db){ render(); return; }
   const onErr=e=>{ if(e&&e.code==="revoked"){ S.db=null; render(); } };
-  const sub=(name,q)=>(q||db.collection(name)).onSnapshot(s=>{ S[name]=s.docs.map(d=>Object.assign({id:d.id},d.data())); render(); },onErr);
+  const sub=(name,q)=>(q||db.collection(name)).onSnapshot(s=>{ S[name]=s.docs.map(d=>Object.assign({id:d.id},d.data())); S.loaded=S.loaded||{}; S.loaded[name]=true; render(); sweepOrphans(); },onErr);
   ["items","sources","issues","meetings","tasks","plans","contacts","suggestions"].forEach(n=>sub(n));
   sub("activity",db.collection("activity").orderBy("at","desc").limit(80));
   db.doc("meta/settings").onSnapshot(s=>{ S.settings=s.exists? s.data() : null; render(); },onErr);

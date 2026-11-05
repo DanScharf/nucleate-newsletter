@@ -79,9 +79,18 @@ onAuthStateChanged(auth, async u => {
   try { await Promise.race([getDoc(doc(fs, "meta/settings")), new Promise((_, rej) => setTimeout(() => rej(Object.assign(new Error("The database didn't answer within 20 seconds. Check your internet connection and reload."), { code: "timeout" })), 20000))]); }
   catch (e) { if (e && e.code === "permission-denied") return showAuth({ kind: "denied", email: u.email }); return showAuth({ kind: "error", msg: (e && e.message) || "Unknown error" }); }
   try { await setDoc(doc(fs, "users", u.uid), { name: u.displayName || "", email: u.email || "", photo: u.photoURL || "", lastSeen: Date.now() }, { merge: true }); } catch (e) { }
+  // Presence: while the site is open and visible, say "I'm here" every minute.
+  const beat = () => { if (document.visibilityState === "visible") setDoc(doc(fs, "users", u.uid), { lastSeen: Date.now() }, { merge: true }).catch(() => { }); };
+  setInterval(beat, 60000);
+  document.addEventListener("visibilitychange", beat);
+  window.addEventListener("pagehide", () => { setDoc(doc(fs, "users", u.uid), { lastSeen: Date.now() - 600000, leftAt: Date.now() }, { merge: true }).catch(() => { }); });
+  let peopleSig = "";
   onSnapshot(collection(fs, "users"), s => {
     usersCache = {}; s.docs.forEach(d => usersCache[d.id] = d.data());
-    window.dispatchEvent(new CustomEvent("people-changed", { detail: Object.keys(usersCache) }));
+    window.__presence = Object.fromEntries(Object.entries(usersCache).map(([id, v]) => [id, { seen: v.lastSeen || 0, left: v.leftAt || 0 }]));
+    const sig = JSON.stringify(Object.entries(usersCache).map(([id, v]) => [id, v.name, v.email, v.photo]).sort());
+    if (sig !== peopleSig) { peopleSig = sig; window.dispatchEvent(new CustomEvent("people-changed", { detail: Object.keys(usersCache) })); }
+    else window.dispatchEvent(new CustomEvent("presence-changed"));
   }, () => { });
   const user = {
     id: async () => u.uid, email: async () => (u.email || "").toLowerCase(), isOwner: async () => (u.email || "").toLowerCase() === OWNER_EMAIL, canEdit: async () => true, can: async () => true,
