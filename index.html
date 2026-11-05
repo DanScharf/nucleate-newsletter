@@ -346,6 +346,9 @@ b.men{color:var(--accent)}
 .orow{display:flex;align-items:center;gap:10px;padding:7px 10px}.orow .grow{flex:1}
 .pdot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--line);flex:none}.pdot.on{background:#2FB879;box-shadow:0 0 0 3px rgba(47,184,121,.2)}
 @media (max-width:760px){.onlinebtn .un{display:none}.onlinebtn{padding:4px 8px 4px 6px}}
+.landing .guest{margin-top:22px;padding:14px 16px;border:1px solid rgba(255,255,255,.16);border-radius:14px;background:rgba(255,255,255,.05);color:var(--band-muted);max-width:520px;line-height:1.5}
+.landing .guest b{color:var(--band-ink)}
+.landing .guest .acts{margin-top:10px}
 .userbtn{display:inline-flex;align-items:center;gap:8px;background:transparent;border:1px solid rgba(255,255,255,.18);color:var(--band-ink);border-radius:999px;padding:4px 10px 4px 4px;cursor:pointer;font:inherit}
 .userbtn:hover{border-color:rgba(255,255,255,.4)}
 @media (max-width:760px){.mast{flex-wrap:wrap}.mainnav{order:5;flex-basis:100%;margin:6px -4px 0}.mainnav a{padding:7px 12px;font-size:14px}.userbtn .un{display:none}.brand .n2{display:none}}
@@ -448,11 +451,11 @@ a.segbtn[aria-selected=true]{background:var(--surface);color:var(--ink);box-shad
 })();
 </script>
 
-<script src="app.js?v=202611061000"></script>
-<script type="module" src="./firebase-backend.js?v=202611061000"></script>
+<script src="app.js?v=202611071000"></script>
+<script type="module" src="./firebase-backend.js?v=202611071000"></script>
 <script>
 // Safety net: if the site hasn't started after 15 seconds, explain what to do instead of spinning forever.
-window.__SITE_BUILD="202611061000";
+window.__SITE_BUILD="202611071000";
 window.__bootErrors=[]; window.addEventListener("error",e=>window.__bootErrors.push(e.message||String(e.error||"")));
 setTimeout(()=>{ const m=document.getElementById("main"); if(!m||!/Loading the site|Opening the desk/.test(m.textContent)) return;
   const mismatch=!window.__startApp?"The site's files didn't load (app.js is missing or out of date).":(window.__APP_BUILD&&window.__APP_BUILD!==window.__SITE_BUILD)?"Your browser has a mix of old and new files.":"";

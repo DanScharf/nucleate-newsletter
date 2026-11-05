@@ -127,6 +127,8 @@ form.addEventListener("submit", async e => {
   catch (er) { msg.innerHTML = `<div class="msg err">Couldn't send it. Check your connection and try again.</div>`; }
   btn.disabled = false;
 });
+
+if (location.hash === "#suggest") setTimeout(() => { const f = document.getElementById("sTitle"); if (f) f.focus({ preventScroll: true }); }, 300);
 </script>
 </body>
 </html>
