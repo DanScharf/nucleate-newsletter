@@ -17,7 +17,7 @@ const CKINDS = [["speaker","Speaker"],["sponsor","Sponsor"],["partner","Partner 
 const CKIND = Object.fromEntries(CKINDS);
 const DEFAULT_CHECK = ["Venue booked","Speaker / host confirmed","Poster designed","Registration link ready","Announced in the newsletter"];
 const SECTIONS = [
-  {key:"soon",title:"⏰ Coming up this week",types:null},
+  {key:"soon",title:"⏰ Coming up next week",types:null},
   {key:"events",title:"📅 Events",types:["event"]},
   {key:"opps",title:"💰 Opportunities",types:["funding","job","opportunity"]},
   {key:"science",title:"🧪 Science & industry",types:["research","industry"]},
@@ -56,7 +56,15 @@ const agoPhrase = ms => { const a=ago(ms); return a==="now"?"just now":/^\d+[mhd
 const plural = (n,w,pl) => n+" "+(n===1?w:(pl||w+"s"));
 const nextStage = s => { const ix=STAGES.findIndex(x=>x[0]===(s||"found")); return ix>=0&&ix<STAGES.length-1? STAGES[ix+1][0] : null; };
 const weekStart = (t=Date.now()) => { const d=new Date(t); d.setHours(0,0,0,0); d.setDate(d.getDate()-d.getDay()); return d.getTime(); };
-const settings = () => Object.assign({name:"Nucleate Technion Weekly",footer:"Forward to a friend who'd want this 🙌",nextIssue:1,draftIntro:"",owners:{}}, S.settings||{});
+// The WhatsApp message: a header and a footer around the sections. {n} becomes the issue number.
+const DEFAULT_HEADER = "The Technion Nucletter #{n}\nכל האירועים וההזדמנויות מזוקקים במקום אחד 📰";
+const DEFAULT_FOOTER = "שמעתם על אירוע, משרה או פעילות שיכולה לעניין את הקהילה? שתפו אותנו בפרטי ואולי זה יופיע בניוזלטר הבא!\n\nנוקלייאט מחבר בין סטודנטים לתעשייה🧬\n\nמוזמנים לשתף:\nhttps://chat.whatsapp.com/G3W1YmnVYJpI4gkq1LAKXu?s=sw&p=i&mlu=4&ilr=4&iam=2";
+const settings = () => Object.assign({name:"The Technion Nucletter",headerTpl:DEFAULT_HEADER,footerTpl:DEFAULT_FOOTER,draftHeader:"",draftFooter:"",nextIssue:1,draftIntro:"",owners:{}}, S.settings||{});
+const fillTpl = (t,n) => String(t||"").replace(/\{n\}/g, n);
+// This issue's header/footer: what was typed for this issue, otherwise the template.
+const hfTyping = k => { const el=document.getElementById("hf-"+k); return el&&el.value!==el.defaultValue? el.value : null; };
+const issueHeader = st => hfTyping("header")!==null? hfTyping("header") : (st.draftHeader||"").trim()? st.draftHeader : fillTpl(st.headerTpl,st.nextIssue)+((st.draftIntro||"").trim()?"\n\n"+st.draftIntro.trim():"");
+const issueFooter = st => hfTyping("footer")!==null? hfTyping("footer") : (st.draftFooter||"").trim()? st.draftFooter : fillTpl(st.footerTpl,st.nextIssue);
 const nameOf = id => { if(!id) return "Someone"; const p=S.profiles[id]; return (p&&p.name) || (id===S.meId ? "You" : "Teammate"); };
 const firstName = id => nameOf(id).split(" ")[0];
 const avOf = id => (S.profiles[id]&&S.profiles[id].avatarUrl) || "";
@@ -139,7 +147,7 @@ async function purgeOld(){ if(S.purged||!isAdmin()) return; S.purged=true; const
 
 const whenExists = (col,id) => new Promise(res=>{ let n=0; const tick=()=>{ if(S[col].some(x=>x.id===id)||++n>40) return res(); setTimeout(tick,50); }; tick(); });
 // ───────── render loop ─────────
-window.__APP_BUILD="202611051000";
+window.__APP_BUILD="202611061000";
 let raf=0, renderFails=0; function render(){ cancelAnimationFrame(raf); raf=requestAnimationFrame(()=>{ try{ doRender(); renderFails=0; }catch(err){ console.error(err); if(++renderFails<3) return; const m=$("#main"); if(m) m.innerHTML=`<div class="empty"><b>Something went wrong showing this page</b>Try a hard refresh (Cmd+Shift+R on Mac, Ctrl+Shift+R on Windows). If it keeps happening, send a screenshot of this message to Dan.<br><br><code style="font-size:12px">${esc(String(err&&err.message||err))}</code><br><br><button class="btn pri" onclick="location.reload()">Reload</button></div>`; } }); }
 const NAV=[["home","Home",[]],["news","Newsletter",[["board","Pipeline"],["issue","This issue"],["sources","Sources"],["inbox","Suggestions"],["archive","Archive"]]],["events","Events",[["events","Event planner"],["calendar","Calendar"]]],["team","Team",[["tasks","Tasks"],["contacts","Contacts"],["team","People & access"]]]];
 const sectionOf = v => v==="home"?"home":["board","issue","sources","inbox","archive","places"].includes(v)?"news":["events","event","calendar"].includes(v)?"events":["tasks","contacts","team"].includes(v)?"team":"";
@@ -411,20 +419,25 @@ function itemText(i){
   if(meta.length) lines.push("_"+meta.join(" · ")+"_"); if(i.url) lines.push("🔗 "+i.url); return lines.join("\n");
 }
 function composeText(){
-  const st=settings(); const secs=issueItems(); const date=new Date().toLocaleDateString("en-GB",{day:"numeric",month:"long",year:"numeric"});
-  let t=`*${st.name}* · Issue #${st.nextIssue}\n_${date}_\n`; if((st.draftIntro||"").trim()) t+=`\n${st.draftIntro.trim()}\n`;
-  SECTIONS.forEach(s=>{ const its=secs[s.key]; if(!its.length) return; t+=`\n━━━━━━━━━━\n*${s.title}*\n\n`+its.map(itemText).join("\n\n")+"\n"; });
-  if((st.footer||"").trim()) t+=`\n━━━━━━━━━━\n${st.footer.trim()}`; return t;
+  const st=settings(); const secs=issueItems(); const parts=[];
+  SECTIONS.forEach(s=>{ const its=secs[s.key]; if(its.length) parts.push(`━━━━━━━━━━\n*${s.title}*\n\n`+its.map(itemText).join("\n\n")); });
+  const head=issueHeader(st).trim(), foot=issueFooter(st).trim();
+  let t=head; if(parts.length) t+=(t?"\n":"")+parts.join("\n\n"); if(foot) t+=(t?"\n\n":"")+"━━━━━━━━━━\n"+foot; return t;
 }
 function waHtml(t){ return esc(t).replace(/\*([^*\n]+)\*/g,"<b>$1</b>").replace(/(^|[\s(])_([^_\n]+)_/g,"$1<i>$2</i>"); }
+function hfBox(k,label,val,custom,rows){ const ad=isAdmin();
+  return `<div class="sec"><div class="sec-h"><h3>${label}</h3><span class="eyebrow">${custom?"edited for this issue":"from the template"}</span></div>
+    <textarea id="hf-${k}" data-hf="${k}" rows="${rows}" dir="auto" ${ad?"":"disabled"}>${esc(val)}</textarea>
+    ${ad?`<div class="toolbar" style="margin:8px 0 0">${custom?`<button class="btn sm" data-act="hf-reset" data-k="${k}">Back to the template</button>`:""}<button class="btn sm ghost" data-act="hf-default" data-k="${k}">Save as the template for future issues</button></div>`:`<div class="hint" style="margin-top:6px">Admins edit the opening and closing.</div>`}</div>`; }
 function vIssue(){
   const st=settings(); const secs=issueItems(); const total=Object.values(secs).reduce((a,b)=>a+b.length,0);
   const ownerSel=key=>pick("sec-"+key,secOwners(key),{save:"sec:"+key,dis:!isAdmin(),label:"Section owners"});
   const left=`<div class="list" style="gap:12px">
-    <div class="sec"><div class="sec-h"><h3>Intro</h3></div><textarea id="intro" rows="3" dir="auto" placeholder="${isAdmin()?"A line or two to open the issue (optional)":"Admins write the intro"}" ${isAdmin()?"":"disabled"}>${esc(st.draftIntro)}</textarea></div>
+    ${hfBox("header","Opening (header)",issueHeader(st),!!(st.draftHeader||"").trim(),3)}
     ${SECTIONS.map(s=>`<div class="sec"><div class="sec-h"><h3>${s.title}</h3>${s.key==="soon"?`<span class="eyebrow">auto: within 7 days</span>`:ownerSel(s.key)}</div>
       ${secs[s.key].length? secs[s.key].map((i,ix)=>`<div class="mini"><span class="dot" style="color:${tcol(i.type)}"></span><span class="t" dir="auto">${esc(i.title)}</span>${S.canWrite?`<button class="btn sm ghost" data-move="${esc(i.id)}" data-sec="${s.key}" data-dir="-1" aria-label="Move up" ${ix===0?"disabled":""}>↑</button><button class="btn sm ghost" data-move="${esc(i.id)}" data-sec="${s.key}" data-dir="1" aria-label="Move down" ${ix===secs[s.key].length-1?"disabled":""}>↓</button>`:""}<button class="btn sm" data-open="${esc(i.id)}">Edit</button></div>`).join("") : `<div class="colempty">No items. Move cards to "In this issue" on the pipeline.</div>`}
-    </div>`).join("")}</div>`;
+    </div>`).join("")}
+    ${hfBox("footer","Closing (footer)",issueFooter(st),!!(st.draftFooter||"").trim(),9)}</div>`;
   const right=`<div><div class="phone"><div class="eyebrow" style="margin-bottom:8px">WhatsApp preview</div><div class="bubble" dir="auto">${waHtml(composeText())}</div></div>
     <div class="toolbar" style="margin-top:12px"><button class="btn pri" data-act="copy-issue" ${total?"":"disabled"}>Copy for WhatsApp</button>${isAdmin()?`<button class="btn" data-act="send-issue" ${total?"":"disabled"}>Mark issue #${st.nextIssue} as sent</button>`:`<span class="hint">An admin sends the issue.</span>`}</div><div id="sendConfirm"></div></div>`;
   return `<h2>Issue #${st.nextIssue}</h2><p class="sub">${plural(total,"item")} · ${composeText().length.toLocaleString()} characters. The text uses WhatsApp formatting, so it pastes straight into the group.</p><div class="issue-grid">${left}${right}</div>`;
@@ -1062,7 +1075,7 @@ async function sendIssue(){
     try{ await S.db.collection("published").doc("issue-"+n).set({number:n,text,sentAt,name:st.name,events:its.filter(i=>i.date).map(i=>({title:i.title,date:i.date,location:i.location||"",url:i.url||"",summary:i.summary||"",type:i.type}))}); }catch{}
     for(const i of its){ await S.db.collection("items").doc(i.id).update({status:"archived",issueNo:n,order:null,...stamp()});
       if(i.recurring&&i.recurring!=="none"){ const c=JSON.parse(JSON.stringify(i)); delete c.id; Object.assign(c,{status:"found",issueNo:null,votes:{},comments:{},owner:null,owners:[],order:null,date:shiftDate(i.date,i.recurring),deadline:shiftDate(i.deadline,i.recurring),createdAt:Date.now(),...stamp(),addedBy:S.meId,tags:[...new Set([...(i.tags||[]),"recurring"])]}); await S.db.collection("items").add(c); } }
-    await saveSettings({nextIssue:n+1,draftIntro:""}); logAct("sent issue",`#${n} (${plural(its.length,"item")})`,null); toast(`Issue #${n} archived and published. On to #${n+1}.`);
+    await saveSettings({nextIssue:n+1,draftIntro:"",draftHeader:"",draftFooter:""}); logAct("sent issue",`#${n} (${plural(its.length,"item")})`,null); toast(`Issue #${n} archived and published. On to #${n+1}.`);
   }catch(e){ writeErr(e); }
 }
 async function copyText(t){ try{ await navigator.clipboard.writeText(t); toast("Copied. Paste it into WhatsApp."); }catch{ const ta=document.createElement("textarea"); ta.value=t; ta.style.position="fixed"; ta.style.opacity="0"; document.body.append(ta); ta.select(); let ok=false; try{ok=document.execCommand("copy");}catch{} ta.remove(); toast(ok?"Copied. Paste it into WhatsApp.":"Couldn't copy automatically. Select the preview text and copy it."); } }
@@ -1164,7 +1177,10 @@ document.addEventListener("click", async e=>{
   else if(a==="send-issue"){ const n=settings().nextIssue; $("#sendConfirm").innerHTML=`<div class="confirm">Archive issue #${n} and its ${A("items").filter(i=>i.status==="issue").length} items, and publish it on the public page? Recurring items come back for next time. <button class="btn sm pri" data-act="send-yes">Yes, mark sent</button><button class="btn sm" data-act="send-no">Not yet</button></div>`; }
   else if(a==="send-yes") sendIssue();
   else if(a==="send-no") $("#sendConfirm").innerHTML="";
-  else if(a==="save-settings"){ const name=$("#stName").value.trim()||"Nucleate Technion Weekly", footer=$("#stFooter").value; await saveSettings({name,footer}); closeDrawer(); toast("Settings saved."); }
+  else if(a==="hf-reset"){ const k=t.dataset.k; await saveSettings(k==="header"?{draftHeader:"",draftIntro:""}:{draftFooter:""}); toast("Back to the template."); }
+  else if(a==="hf-default"){ const k=t.dataset.k; const box=$("#hf-"+k); const st=settings(); let v=box?box.value:""; v=v.replace(new RegExp("#"+st.nextIssue+"(?!\\d)","g"),"#{n}");
+    await saveSettings(k==="header"?{headerTpl:v,draftHeader:"",draftIntro:""}:{footerTpl:v,draftFooter:""}); toast("Saved as the template. Future issues start with it."); }
+  else if(a==="save-settings"){ const name=$("#stName").value.trim()||"The Technion Nucletter"; await saveSettings({name,headerTpl:$("#stHeader").value||DEFAULT_HEADER,footerTpl:$("#stFooter").value||DEFAULT_FOOTER}); closeDrawer(); toast("Settings saved."); }
   else if(a==="backup") exportBackup();
   else if(a==="restore-pick") $("#restoreFile").click();
   else if(a==="restore-yes"){ const f=$("#restoreFile").files[0]; if(f) importBackup(f); $("#restoreConfirm").innerHTML=""; }
@@ -1211,6 +1227,7 @@ document.addEventListener("submit", async e=>{
 });
 document.addEventListener("input", e=>{
   if(e.target.dataset.dz){ const p=S.plans.find(x=>x.id===S.eventId); if(p){ designState(p)[e.target.dataset.dz]=e.target.value; refreshPoster(); } return; }
+  if(e.target.dataset.hf){ const b=document.querySelector(".bubble"); if(b) b.innerHTML=waHtml(composeText()); return; }
   if(e.target.id==="fq"){ S.f.q=e.target.value; clearTimeout(S._qT); S._qT=setTimeout(()=>{ render(); requestAnimationFrame(()=>{ const q=$("#fq"); if(q){ q.focus(); q.setSelectionRange(q.value.length,q.value.length);} }); },200); }
   if(e.target.id==="cq"){ S.cf.q=e.target.value; clearTimeout(S._cT); S._cT=setTimeout(render,200); }
 });
@@ -1219,6 +1236,7 @@ document.addEventListener("change", e=>{
   if(ds.dzb){ const p=S.plans.find(x=>x.id===S.eventId); designState(p)[ds.dzb]=e.target.checked; refreshPoster(); return; } if(e.target.tagName==="SELECT") e.target.dataset.dirty="1";
   if(id==="ftype"){S.f.type=e.target.value;render();} else if(id==="fwho"){S.f.who=e.target.value;render();} else if(id==="ftag"){S.f.tag=e.target.value;render();} else if(id==="ckind"){S.cf.kind=e.target.value;render();}
   else if(id==="intro"){ saveSettings({draftIntro:e.target.value}); }
+  else if(ds.hf){ const k=ds.hf==="header"?"draftHeader":"draftFooter"; saveSettings({[k]:e.target.value, ...(k==="draftHeader"?{draftIntro:""}:{})}).then(()=>{ e.target.defaultValue=e.target.value; }); }
   else if(ds.bud){ const v=e.target.type==="checkbox"?e.target.checked:e.target.tagName==="SELECT"?e.target.value:(Number(e.target.value)||0); evUpdate(S.plans.find(x=>x.id===S.eventId),{budget:{[ds.bud]:{[ds.f]:v}}}).then(()=>{ e.target.defaultValue=e.target.value; delete e.target.dataset.dirty; if(e.target.type==="checkbox") e.target.defaultChecked=e.target.checked; }); }
   else if(ds.guest){ evUpdate(S.plans.find(x=>x.id===S.eventId),{guests:{[ds.guest]:{[ds.f]:e.target.value}}}).then(()=>delete e.target.dataset.dirty); }
   else if(ds.run){ const cb=e.target.type==="checkbox"; evUpdate(S.plans.find(x=>x.id===S.eventId),{run:{[ds.run]:{[ds.f]:cb?e.target.checked:e.target.value}}}).then(()=>{ if(cb) e.target.defaultChecked=e.target.checked; else e.target.defaultValue=e.target.value; delete e.target.dataset.dirty; }); }
@@ -1243,7 +1261,9 @@ function openSettings(){
   S.drawer=null; const st=settings(); const L=$("#layer"); L.querySelector(".scrim")?.remove(); const admin=isAdmin(); const trashN=Object.keys(TRASHABLE).reduce((n,c)=>n+S[c].filter(x=>x.deleted).length,0);
   const el=document.createElement("div"); el.className="scrim"; el.dataset.kind="settings"; el.innerHTML=`<div class="drawer" role="dialog" aria-modal="true" aria-label="Settings"><div class="dh"><h2>Settings</h2><button class="btn ghost" data-act="close" aria-label="Close">✕</button></div>
     ${admin?`<div class="box"><h3>Newsletter</h3><label class="f">Newsletter name<input id="stName" dir="auto" value="${esc(st.name)}"></label>
-    <label class="f">Sign-off line at the bottom of each issue<textarea id="stFooter" rows="2" dir="auto">${esc(st.footer)}</textarea></label><div><button class="btn pri" data-act="save-settings">Save</button></div></div>`:""}
+    <label class="f">Opening template (header)<textarea id="stHeader" rows="3" dir="auto">${esc(st.headerTpl)}</textarea></label>
+    <label class="f">Closing template (footer)<textarea id="stFooter" rows="6" dir="auto">${esc(st.footerTpl)}</textarea></label>
+    <div class="hint">{n} is replaced by the issue number. You can still change the opening and closing for a single issue on the This issue page.</div><div><button class="btn pri" data-act="save-settings">Save</button></div></div>`:""}
     <div class="box"><h3>Public page</h3><p class="sub" style="margin:0">Anyone can open it without signing in. It shows published issues, upcoming events from them, and a form where students suggest items. Suggestions land in your Suggestions inbox.</p><div class="toolbar" style="margin:0"><a class="btn" href="public.html" target="_blank" rel="noopener">Open public page ↗</a><button class="btn" data-act="copy-public">Copy link</button></div></div>
     <div class="box"><h3>Calendar</h3><p class="sub" style="margin:0">Download every meeting, event and dated item as one file. Open it on your computer or phone to add them all to Google Calendar, Apple Calendar or Outlook. Download it again when things change.</p><div><button class="btn" data-act="ics">⤓ Download calendar file</button></div></div>
     <div class="box"><h3>Trash</h3><p class="sub" style="margin:0">${plural(trashN,"thing")} in the Trash. Deleted things are kept for 30 days.</p><div><button class="btn" data-act="go-trash">Open Trash</button></div></div>
