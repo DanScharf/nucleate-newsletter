@@ -23,6 +23,12 @@ The site files are hosted on GitHub Pages. The data and Google sign-in live in F
 
 Uploading new files never deletes data. The data lives in Firebase, not on GitHub.
 
+## Public page (for students)
+- `public.html`: the latest issue as cards (filter by type, add to calendar, share, "I'm interested"), upcoming events, event feedback, and a suggestion form. Links to the WhatsApp group.
+- **Event feedback:** on an event's page → After the event → *Open feedback on the public page*. Attendees rate it (stars, good, improve, would come again). Only admins see the answers, under **Events → Feedback**.
+- **Interest:** taps on "I'm interested" are counted per item. Admins see them in **Newsletter → Archive**.
+- After this update, an admin clicks **Archive → Refresh issues on the public page** once, so older issues get the new look.
+
 ## Roles
 - **Owner** (scharfdan2000@gmail.com): always an admin. Set in `firestore.rules` and `firebase-backend.js`.
 - **Admins:** edit or delete anything, send issues, manage sources, settings, backups and the team list.

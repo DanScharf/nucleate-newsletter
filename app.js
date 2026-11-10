@@ -30,7 +30,7 @@ const TRASHABLE = {items:"Newsletter item",meetings:"Calendar entry",tasks:"Task
 
 // ───────── state ─────────
 const now0 = new Date();
-const S = {items:[],sources:[],activity:[],issues:[],meetings:[],tasks:[],plans:[],contacts:[],suggestions:[],settings:null,access:null,known:[],
+const S = {items:[],sources:[],activity:[],issues:[],meetings:[],tasks:[],plans:[],contacts:[],suggestions:[],feedback:[],fbEvents:[],interest:[],settings:null,access:null,known:[],
   db:null,user:null,meId:null,myEmail:"",profiles:{},canWrite:true,purged:false,
   view:"home",f:{q:"",type:"",who:"",tag:""},cf:{q:"",kind:""},tf:"mine",drawer:null,confirmRemove:null,
   cal:{y:now0.getFullYear(),m:now0.getMonth(),sel:null}};
@@ -147,17 +147,17 @@ async function purgeOld(){ if(S.purged||!isAdmin()) return; S.purged=true; const
 
 const whenExists = (col,id) => new Promise(res=>{ let n=0; const tick=()=>{ if(S[col].some(x=>x.id===id)||++n>40) return res(); setTimeout(tick,50); }; tick(); });
 // ───────── render loop ─────────
-window.__APP_BUILD="202611071000";
+window.__APP_BUILD="202611101000";
 let raf=0, renderFails=0; function render(){ cancelAnimationFrame(raf); raf=requestAnimationFrame(()=>{ try{ doRender(); renderFails=0; }catch(err){ console.error(err); if(++renderFails<3) return; const m=$("#main"); if(m) m.innerHTML=`<div class="empty"><b>Something went wrong showing this page</b>Try a hard refresh (Cmd+Shift+R on Mac, Ctrl+Shift+R on Windows). If it keeps happening, send a screenshot of this message to Dan.<br><br><code style="font-size:12px">${esc(String(err&&err.message||err))}</code><br><br><button class="btn pri" onclick="location.reload()">Reload</button></div>`; } }); }
-const NAV=[["home","Home",[]],["news","Newsletter",[["board","Pipeline"],["issue","This issue"],["sources","Sources"],["inbox","Suggestions"],["archive","Archive"]]],["events","Events",[["events","Event planner"],["calendar","Calendar"]]],["team","Team",[["tasks","Tasks"],["contacts","Contacts"],["team","People & access"]]]];
-const sectionOf = v => v==="home"?"home":["board","issue","sources","inbox","archive","places"].includes(v)?"news":["events","event","calendar"].includes(v)?"events":["tasks","contacts","team"].includes(v)?"team":"";
+const NAV=[["home","Home",[]],["news","Newsletter",[["board","Pipeline"],["issue","This issue"],["sources","Sources"],["inbox","Suggestions"],["archive","Archive"]]],["events","Events",[["events","Event planner"],["calendar","Calendar"],["feedback","Feedback"]]],["team","Team",[["tasks","Tasks"],["contacts","Contacts"],["team","People & access"]]]];
+const sectionOf = v => v==="home"?"home":["board","issue","sources","inbox","archive","places"].includes(v)?"news":["events","event","calendar","feedback"].includes(v)?"events":["tasks","contacts","team"].includes(v)?"team":"";
 function doRender(){
   if($("#who")) $("#who").innerHTML = S.meId ? `<b style="color:var(--ink)">${esc(nameOf(S.meId))}</b>${S.myEmail?`<div class="hint">${esc(S.myEmail)}${roleOf(S.myEmail)?" · "+esc(roleOf(S.myEmail)):""}</div>`:""}` : "";
   const setH=(id,v)=>{ const el=$(id); if(el) el.hidden=v; }; const setT=(id,prop,v)=>{ const el=$(id); if(el) el[prop]=v; };
   setH("#btnNew", !S.canWrite || !S.db); setH("#btnUser", !S.db); setT("#userName","textContent", S.meId? nameOf(S.meId) : ""); setT("#userAv","innerHTML", S.meId? avImg(S.meId) : "");
   const myOpen=A("tasks").filter(t=>!t.done&&tAss(t).includes(S.meId)).length;
   const counts = {board:A("items").filter(i=>i.status!=="archived").length, calendar:upcoming(30).length, places:A("items").filter(i=>i.status!=="archived"&&i.location).length, issue:A("items").filter(i=>i.status==="issue").length,
-    sources:S.sources.length, archive:S.issues.length, tasks:myOpen, events:A("plans").filter(p=>p.stage!=="done").length, contacts:A("contacts").length, inbox:A("suggestions").length};
+    sources:S.sources.length, archive:S.issues.length, tasks:myOpen, events:A("plans").filter(p=>p.stage!=="done").length, contacts:A("contacts").length, inbox:A("suggestions").length, feedback:S.feedback.filter(f=>!f.seen).length};
   const sec=sectionOf(S.view); const badge={news:A("suggestions").length,events:upcoming(7).filter(x=>x.kind!=="item").length,team:myOpen};
   if($("#onlineBtn")){ const on=onlineIds(); $("#onlineBtn").hidden=!S.db||!S.known.length;
     $("#onlineAvs").innerHTML = on.length? on.slice(0,4).map(id=>`<span class="oav">${avImg(id)||`<span class="av ini">${esc(nameOf(id)[0]||"?")}</span>`}</span>`).join("")+(on.length>4?`<span class="omore">+${on.length-4}</span>`:"") : "";
@@ -166,13 +166,13 @@ function doRender(){
     const others=S.known.filter(id=>id!==S.meId).sort((a,b)=>(isOnline(b)-isOnline(a))||(lastSeenAt(b)-lastSeenAt(a)));
     $("#menu-online").innerHTML = `<div class="who">Who's on the site</div>`+[S.meId,...others].filter(Boolean).map(id=>`<div class="orow">${avImg(id)}<span class="grow">${esc(nameOf(id))}${id===S.meId?" (you)":""}</span>${presDot(id)}<span class="hint">${isOnline(id)?"online":lastSeenAt(id)?esc(agoPhrase(lastSeenAt(id))):"not yet"}</span></div>`).join(""); }
   if($("#mainnav")) $("#mainnav").innerHTML = S.db ? NAV.map(([k,l,subs])=>`<a href="#${(S.lastSub&&S.lastSub[k])||(subs[0]?subs[0][0]:"home")}" ${sec===k?'aria-current="page"':""}>${l}${badge[k]?`<span class="n">${badge[k]}</span>`:""}</a>`).join("") : "";
-  const subs=(NAV.find(n=>n[0]===sec)||[])[2]||[];
+  const subs=((NAV.find(n=>n[0]===sec)||[])[2]||[]).filter(([k])=>k!=="feedback"||isAdmin());
   if($("#tabs")) $("#tabs").innerHTML = S.db&&subs.length ? subs.map(([k,l])=>`<a href="#${k}" ${S.view===k||(S.view==="event"&&k==="events")||(S.view==="places"&&k==="board")?'aria-current="page"':""}>${l}${counts[k]?`<span class="n">${counts[k]}</span>`:""}</a>`).join("") : "";
   if($("#tabs")) $("#tabs").hidden = !subs.length || !S.db;
   const m=$("#main");
   if(!S.db){ m.innerHTML = window.__authScreen ? window.__authScreen() : `<div class="empty"><b>Opening the desk…</b></div>`; window.__mountDNA&&window.__mountDNA(); return; }
   const banner = S.canWrite ? "" : `<div class="banner">Your account can't save changes. Ask an admin to add you on the Team page.</div>`;
-  const v = {event:vEvent,home:vHome,inbox:vInbox,board:vBoard,calendar:vCalendar,tasks:vTasks,events:vEvents,contacts:vContacts,places:vPlaces,issue:vIssue,sources:vSources,team:vTeam,archive:vArchive,trash:vTrash}[S.view]||vHome;
+  const v = {event:vEvent,feedback:vFeedback,home:vHome,inbox:vInbox,board:vBoard,calendar:vCalendar,tasks:vTasks,events:vEvents,contacts:vContacts,places:vPlaces,issue:vIssue,sources:vSources,team:vTeam,archive:vArchive,trash:vTrash}[S.view]||vHome;
   // Keep whatever someone is typing when live updates from teammates re-draw the page.
   const y=window.scrollY; const ae=document.activeElement; const focusKey=ae&&m.contains(ae)?fieldKey(ae):null; let sel=null; try{ sel=focusKey&&ae.selectionStart!=null?[ae.selectionStart,ae.selectionEnd]:null; }catch{}
   const edited={}; m.querySelectorAll("input,textarea,select").forEach(el=>{ const k=fieldKey(el); if(!k) return; if(el.type==="checkbox"||el.type==="radio"){ if(el.checked!==el.defaultChecked) edited[k]={c:el.checked}; } else if(el.tagName==="SELECT"){ const o=el.options[el.selectedIndex]; if(o&&!o.defaultSelected&&el.dataset.dirty) edited[k]={v:el.value}; } else if(el.value!==el.defaultValue) edited[k]={v:el.value}; });
@@ -489,8 +489,11 @@ async function changeRole(email,list){ let a=accessList("admins").filter(e=>e!==
 function vArchive(){
   const head=`<h2>Archive</h2><p class="sub">Every issue you've sent. They're also on the <a href="public.html" target="_blank" rel="noopener">public page</a>, which anyone can open.</p>`;
   if(!S.issues.length) return head+`<div class="empty"><b>No issues sent yet</b>When an admin marks an issue as sent, it's saved here.</div>`;
-  return head+`<div class="list" style="gap:14px">${S.issues.slice().sort((a,b)=>b.number-a.number).map(is=>`<details class="box"><summary style="cursor:pointer;display:flex;gap:10px;align-items:baseline;flex-wrap:wrap"><h3>Issue #${is.number}</h3><span class="hint">${new Date(is.sentAt).toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"})} · ${plural((is.itemIds||[]).length,"item")} · sent by ${esc(nameOf(is.sentBy))}</span></summary>
-    <div class="bubble" dir="auto" style="max-height:none">${waHtml(is.text||"")}</div><div><button class="btn sm" data-copyissue="${esc(is.id)}">Copy text</button></div></details>`).join("")}</div>`;
+  const intr=n=>{ const c={}; S.interest.filter(x=>x.issue===n).forEach(x=>{ c[x.item]=c[x.item]||{n:0,title:x.title}; c[x.item].n++; }); return Object.values(c).sort((a,b)=>b.n-a.n); };
+  return head+(isAdmin()?`<div class="toolbar" style="margin:-4px 0 14px"><button class="btn sm" data-act="republish">Refresh issues on the public page</button><span class="hint">Use once after this update so older issues get the new look, or after editing a sent item.</span></div>`:"")
+    +`<div class="list" style="gap:14px">${S.issues.slice().sort((a,b)=>b.number-a.number).map(is=>{ const ii=intr(is.number); return `<details class="box"><summary style="cursor:pointer;display:flex;gap:10px;align-items:baseline;flex-wrap:wrap"><h3>Issue #${is.number}</h3><span class="hint">${new Date(is.sentAt).toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"})} · ${plural((is.itemIds||[]).length,"item")} · sent by ${esc(nameOf(is.sentBy))}${isAdmin()&&ii.length?` · ★ ${ii.reduce((a,x)=>a+x.n,0)} interested`:""}</span></summary>
+    ${isAdmin()&&ii.length?`<div class="panel" style="margin:10px 0"><div class="panel-h"><h3>★ What readers were interested in</h3><span class="hint">Taps on "I'm interested" on the public page</span></div><div class="list">${ii.map(x=>`<div class="row"><span class="grow" dir="auto">${esc(x.title)}</span><span class="chip ok">★ ${x.n}</span></div>`).join("")}</div></div>`:""}
+    <div class="bubble" dir="auto" style="max-height:none">${waHtml(is.text||"")}</div><div><button class="btn sm" data-copyissue="${esc(is.id)}">Copy text</button></div></details>`; }).join("")}</div>`;
 }
 function vTrash(){
   const rows=[]; for(const col of Object.keys(TRASHABLE)) S[col].filter(x=>x.deleted&&!(col==="tasks"&&x.deletedWith&&S[x.deletedWith.split(":")[0]]&&S[x.deletedWith.split(":")[0]].some(d=>d.id===x.deletedWith.split(":")[1]&&d.deleted))).forEach(x=>rows.push({col,x}));
@@ -1002,8 +1005,34 @@ function evRun(p,ed){ const r=live(p.run).sort((a,b)=>runCmp(a[1],b[1])); const 
   return `<div class="panel"><div class="panel-h"><h3>Itinerary${p.date?" · "+esc(fmtDW(p.date)):""}${st?" · starts "+esc(st):""}</h3><span class="hint">Change the start time on Overview and the whole itinerary moves with it</span></div>
     <div class="list">${r.map(([k,x])=>`<div class="row"><input type="time" value="${esc(x.time||"")}" data-run="${esc(k)}" data-f="time" aria-label="Time" style="width:120px" ${dis}>${rel(x.time)}<div class="grow"><input value="${esc(x.what||"")}" data-run="${esc(k)}" data-f="what" dir="auto" aria-label="What happens" style="width:100%" ${dis}></div><label class="chk" title="Leave this step out of the shared text and poster"><input type="checkbox" data-run="${esc(k)}" data-f="hide" ${x.hide?"checked":""} ${dis}> Team only</label>${pick("run-"+k,runWho(x),{save:"run:"+k,dis:!ed,label:"Who"})}${ed?`<button class="btn sm ghost danger" data-rundel="${esc(k)}" aria-label="Remove">✕</button>`:""}</div>`).join("")||`<div class="colempty">Nothing planned yet.</div>`}</div>
     ${ed?`<form id="runForm" class="toolbar" style="margin:12px 0 0"><input id="runTime" type="time" aria-label="Time"><input id="runWhat" placeholder="What happens: Doors open, Opening words…" dir="auto" style="flex:1 1 220px"><button class="btn" type="submit">Add</button><div class="taskAddWho" style="flex-basis:100%"><span class="hint">Who:</span>${pick("runWho",[],{label:"Who"})}</div></form>`:""}</div>`; }
+// ───────── Event feedback from attendees (public page → admins only) ─────────
+const fbFor = id => S.feedback.filter(f=>f.eventId===id).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+const stars = n => `<span class="stars" aria-label="${n} of 5">${"★".repeat(Math.round(n))}${"☆".repeat(5-Math.round(n))}</span>`;
+function fbSummary(list){ if(!list.length) return null; const avg=list.reduce((a,f)=>a+(+f.rating||0),0)/list.length; const yes=list.filter(f=>f.again==="yes").length;
+  return {n:list.length,avg,again:Math.round(100*yes/list.length)}; }
+function fbRow(f){ return `<div class="fbr${f.seen?"":" new"}"><div class="fbh">${stars(+f.rating||0)}<span class="hint">${esc(f.name||"Anonymous")}${f.email?` · <a href="mailto:${esc(f.email)}">${esc(f.email)}</a>`:""} · ${agoPhrase(f.createdAt||Date.now())}</span>${f.again?`<span class="chip ${f.again==="yes"?"ok":f.again==="no"?"hot":""}">${f.again==="yes"?"Would come again":f.again==="no"?"Wouldn't come again":"Maybe again"}</span>`:""}<span style="flex:1"></span><button class="btn sm ghost danger" data-act="fb-del" data-id="${esc(f.id)}" aria-label="Delete response">✕</button></div>
+  ${f.good?`<div dir="auto"><b>Good:</b> ${esc(f.good)}</div>`:""}${f.improve?`<div dir="auto"><b>Improve:</b> ${esc(f.improve)}</div>`:""}</div>`; }
+async function setFeedbackOpen(p, open){ if(!p) return;
+  try{ await S.db.collection("feedbackEvents").doc(p.id).set({title:p.title||"",date:p.date||"",location:p.location||"",open,updatedAt:Date.now()});
+    await evUpdate(p,{feedbackOpen:open},open?"opened feedback for":"closed feedback for"); toast(open?"Feedback is open on the public page.":"Feedback closed. Responses you got are kept."); }catch(e){ writeErr(e); } }
+function fbPanel(p){ const list=fbFor(p.id); const sm=fbSummary(list); const open=!!(S.fbEvents.find(x=>x.id===p.id)||{}).open; const past=!p.date||daysTo(p.date)<=0;
+  return `<div class="panel" style="margin-bottom:16px"><div class="panel-h"><h3>Feedback from attendees</h3>${open?`<span class="chip ok">Open on the public page</span>`:""}</div>
+    <p class="sub" style="margin:0 0 10px">${open?"Attendees can rate this event on the public page. Share the link in the WhatsApp group after the event.":past?"Let attendees rate this event on the public page (stars, what was good, what to improve). Only admins see the answers.":"You can open feedback once the event day arrives."}</p>
+    <div class="toolbar" style="margin:0 0 ${sm?"12px":"0"}">${open?`<button class="btn sm" data-act="fb-close">Close feedback</button><button class="btn sm" data-act="copy-fb">Copy the feedback link</button>`:`<button class="btn sm ${past?"pri":""}" data-act="fb-open" ${past?"":"disabled"}>Open feedback on the public page</button>`}</div>
+    ${isAdmin()?(sm?`<div class="tiles" style="grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:10px"><div class="tile"><span class="v small">${sm.avg.toFixed(1)} ★</span><span class="l">average</span></div><div class="tile"><span class="v small">${sm.n}</span><span class="l">responses</span></div><div class="tile"><span class="v small">${sm.again}%</span><span class="l">would come again</span></div></div>${list.slice(0,20).map(fbRow).join("")}`:(open?`<div class="colempty">No responses yet.</div>`:"")):(sm?`<div class="hint">${plural(sm.n,"response")} so far. Admins can read them.</div>`:"")}</div>`; }
+function vFeedback(){
+  if(!isAdmin()) return `<div class="empty"><b>Admins only</b>Event feedback is visible to admins.</div>`;
+  const evs=S.fbEvents.slice(); S.plans.filter(p=>!p.deleted&&fbFor(p.id).length&&!evs.some(e=>e.id===p.id)).forEach(p=>evs.push({id:p.id,title:p.title,date:p.date,open:false}));
+  const orphan=S.feedback.filter(f=>!evs.some(e=>e.id===f.eventId)); if(orphan.length) evs.push({id:"__other",title:"Deleted events",date:"",open:false});
+  evs.sort((a,b)=>(b.date||"")<(a.date||"")?-1:1); const unseen=S.feedback.filter(f=>!f.seen).length;
+  return `<div class="vhead"><div><h2>Event feedback</h2><p class="sub">What attendees said on the public page. Only admins see this. Open feedback for an event from its page → After the event.</p></div>${unseen?`<button class="btn sm" data-act="fb-seen">Mark all ${unseen} as read</button>`:""}</div>
+    ${evs.length?evs.map(e=>{ const list=e.id==="__other"?orphan:fbFor(e.id); const sm=fbSummary(list); const p=S.plans.find(x=>x.id===e.id);
+      return `<div class="panel" style="margin-bottom:14px"><div class="panel-h"><h3 dir="auto">${p?`<a href="#event-${esc(p.id)}">${esc(e.title)}</a>`:esc(e.title)}${e.date?` <span class="hint">· ${esc(fmtDW(e.date))}</span>`:""}</h3>${e.open?`<span class="chip ok">Open</span>`:`<span class="chip">Closed</span>`}</div>
+        ${sm?`<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">${stars(sm.avg)}<b>${sm.avg.toFixed(1)}</b><span class="hint">${plural(sm.n,"response")} · ${sm.again}% would come again</span></div>${list.map(fbRow).join("")}`:`<div class="colempty">No responses yet.</div>`}</div>`; }).join("")
+      :`<div class="empty"><b>No feedback yet</b>On an event's page, go to After the event and open feedback. Attendees then rate it on the public page.</div>`}`; }
+
 function evAfter(p,ed){ const rv=p.review||{}; const dis=ed?"":"disabled";
-  return `<form class="panel" id="reviewForm" novalidate><div class="panel-h"><h3>After the event</h3><span class="hint">Write it down while it's fresh, so the next event goes better</span></div><div style="display:flex;flex-direction:column;gap:12px">
+  return (ed||isAdmin()?fbPanel(p):"")+`<form class="panel" id="reviewForm" novalidate><div class="panel-h"><h3>After the event</h3><span class="hint">Write it down while it's fresh, so the next event goes better</span></div><div style="display:flex;flex-direction:column;gap:12px">
     <div class="grid2"><label class="f">Registered<input id="rReg" type="number" min="0" value="${esc(rv.registered||"")}" ${dis}></label><label class="f">Actually came<input id="rAtt" type="number" min="0" value="${esc(rv.attendance||"")}" ${dis}></label><label class="f">Rating (1–5)<input id="rRate" type="number" min="1" max="5" value="${esc(rv.rating||"")}" ${dis}></label></div>
     <label class="f">What went well<textarea id="rWell" rows="3" dir="auto" ${dis}>${esc(rv.wentWell||"")}</textarea></label>
     <label class="f">What to do differently next time<textarea id="rImprove" rows="3" dir="auto" ${dis}>${esc(rv.improve||"")}</textarea></label>
@@ -1068,14 +1097,27 @@ async function moveStage(id,stage){ const it=S.items.find(i=>i.id===id); if(!it|
 async function moveInSection(id,sec,dir){ const list=issueItems()[sec]; const ix=list.findIndex(i=>i.id===id); const j=ix+dir; if(ix<0||j<0||j>=list.length) return;
   const arr=list.slice(); [arr[ix],arr[j]]=[arr[j],arr[ix]]; for(let k=0;k<arr.length;k++){ if(arr[k].order!==k&&!await upd("items",arr[k].id,{order:k})) return; } }
 function shiftDate(s,rec){ const d=parseD(s); if(!d) return ""; if(rec==="weekly") d.setDate(d.getDate()+7); else if(rec==="monthly") d.setMonth(d.getMonth()+1); else if(rec==="yearly") d.setFullYear(d.getFullYear()+1); return ymd(d); }
+// What the public page shows: the issue's sections and items, plus the opening and closing text.
+const pubItem = i => ({id:i.id,title:i.title||"",summary:(i.summary||i.why||"").trim(),type:i.type||"",date:i.date||"",deadline:i.deadline||"",location:i.location||"",online:!!i.online,url:safeUrl(i.url)||""});
+function groupFor(its, ref){ const out={}; SECTIONS.forEach(s=>out[s.key]=[]); const r=new Date(ref); r.setHours(0,0,0,0);
+  its.forEach(i=>{ const ds=i.date||i.deadline; const d=ds?Math.round((parseD(ds)-r)/864e5):null; if(d!==null&&d>=0&&d<=7){out.soon.push(i);return;} const s=SECTIONS.find(s=>s.types&&s.types.includes(i.type)); out[s?s.key:"resources"].push(i); });
+  const order=(a,b)=>(a.order??1e9)-(b.order??1e9)||((a.date||a.deadline||"9")<(b.date||b.deadline||"9")?-1:1);
+  return SECTIONS.map(s=>({key:s.key,title:s.title,items:out[s.key].sort(order).map(pubItem)})).filter(s=>s.items.length); }
+function publishedDoc(n, its, text, sentAt, header, footer){ const st=settings();
+  return {number:n,text,sentAt,name:st.name,header:header||"",footer:footer||"",sections:groupFor(its,sentAt),
+    events:its.filter(i=>i.date).map(i=>({id:i.id,title:i.title,date:i.date,location:i.location||"",url:safeUrl(i.url)||"",summary:i.summary||"",type:i.type}))}; }
+async function republishAll(){ let n=0; for(const is of S.issues){ const its=S.items.filter(i=>(is.itemIds||[]).includes(i.id)||i.issueNo===is.number);
+    try{ await S.db.collection("published").doc("issue-"+is.number).set(publishedDoc(is.number,its,is.text||"",is.sentAt||Date.now(),is.header||"",is.footer||"")); n++; }catch(e){ writeErr(e); return; } }
+  toast(`Updated ${plural(n,"issue")} on the public page.`); }
 async function sendIssue(){
   const st=settings(); const its=A("items").filter(i=>i.status==="issue"); const text=composeText(); const n=st.nextIssue; const sentAt=Date.now();
   try{
-    await S.db.collection("issues").doc("issue-"+n).set({number:n,text,itemIds:its.map(i=>i.id),intro:st.draftIntro||"",sentAt,sentBy:S.meId});
-    try{ await S.db.collection("published").doc("issue-"+n).set({number:n,text,sentAt,name:st.name,events:its.filter(i=>i.date).map(i=>({title:i.title,date:i.date,location:i.location||"",url:i.url||"",summary:i.summary||"",type:i.type}))}); }catch{}
+    const header=issueHeader(st).trim(), footer=issueFooter(st).trim();
+    await S.db.collection("issues").doc("issue-"+n).set({number:n,text,itemIds:its.map(i=>i.id),intro:st.draftIntro||"",header,footer,sentAt,sentBy:S.meId});
+    try{ await S.db.collection("published").doc("issue-"+n).set(publishedDoc(n,its,text,sentAt,header,footer)); }catch{}
     for(const i of its){ await S.db.collection("items").doc(i.id).update({status:"archived",issueNo:n,order:null,...stamp()});
       if(i.recurring&&i.recurring!=="none"){ const c=JSON.parse(JSON.stringify(i)); delete c.id; Object.assign(c,{status:"found",issueNo:null,votes:{},comments:{},owner:null,owners:[],order:null,date:shiftDate(i.date,i.recurring),deadline:shiftDate(i.deadline,i.recurring),createdAt:Date.now(),...stamp(),addedBy:S.meId,tags:[...new Set([...(i.tags||[]),"recurring"])]}); await S.db.collection("items").add(c); } }
-    await saveSettings({nextIssue:n+1,draftIntro:"",draftHeader:"",draftFooter:""}); logAct("sent issue",`#${n} (${plural(its.length,"item")})`,null); toast(`Issue #${n} archived and published. On to #${n+1}.`);
+    await saveSettings({nextIssue:n+1,draftIntro:"",draftHeader:"",draftFooter:""}); logAct("sent issue",`#${n} (${plural(its.length,"item")})`,null); toast(`Issue #${n} archived and added to the public page. On to #${n+1}.`);
   }catch(e){ writeErr(e); }
 }
 async function copyText(t){ try{ await navigator.clipboard.writeText(t); toast("Copied. Paste it into WhatsApp."); }catch{ const ta=document.createElement("textarea"); ta.value=t; ta.style.position="fixed"; ta.style.opacity="0"; document.body.append(ta); ta.select(); let ok=false; try{ok=document.execCommand("copy");}catch{} ta.remove(); toast(ok?"Copied. Paste it into WhatsApp.":"Couldn't copy automatically. Select the preview text and copy it."); } }
@@ -1174,7 +1216,12 @@ document.addEventListener("click", async e=>{
   else if(a==="rm-no"){ S.confirmRemove=null; render(); }
   else if(a==="rm-yes"){ const em=ds.email; S.confirmRemove=null; if(await saveAccess(accessList("admins").filter(e=>e!==em),accessList("members").filter(e=>e!==em))){ logAct("removed from the team:",em); toast(`${em} no longer has access.`); } }
   else if(a==="copy-issue") copyText(composeText());
-  else if(a==="send-issue"){ const n=settings().nextIssue; $("#sendConfirm").innerHTML=`<div class="confirm">Archive issue #${n} and its ${A("items").filter(i=>i.status==="issue").length} items, and publish it on the public page? Recurring items come back for next time. <button class="btn sm pri" data-act="send-yes">Yes, mark sent</button><button class="btn sm" data-act="send-no">Not yet</button></div>`; }
+  else if(a==="copy-fb"){ const u=new URL("public.html#feedback",location.href).href; copyText(u).then(()=>toast("Feedback link copied. Paste it in the WhatsApp group.")); }
+  else if(a==="republish"){ republishAll(); }
+  else if(a==="fb-open"||a==="fb-close"){ const p=S.plans.find(x=>x.id===S.eventId); setFeedbackOpen(p,a==="fb-open"); }
+  else if(a==="fb-seen"){ for(const f of S.feedback.filter(f=>!f.seen&&(!t.dataset.ev||f.eventId===t.dataset.ev))){ try{ await S.db.collection("feedback").doc(f.id).update({seen:true}); }catch(e){ writeErr(e); break; } } }
+  else if(a==="fb-del"){ try{ await S.db.collection("feedback").doc(t.dataset.id).delete(); toast("Response deleted."); }catch(e){ writeErr(e); } }
+  else if(a==="send-issue"){ const n=settings().nextIssue; $("#sendConfirm").innerHTML=`<div class="confirm">Mark issue #${n} as sent? Its ${A("items").filter(i=>i.status==="issue").length} items move to the Archive, and the site automatically adds the issue to the <a href="public.html" target="_blank" rel="noopener">public page</a> (Past issues and Coming up). Nothing is posted to WhatsApp; you paste it there yourself. Recurring items come back for next time. <button class="btn sm pri" data-act="send-yes">Yes, mark sent</button><button class="btn sm" data-act="send-no">Not yet</button></div>`; }
   else if(a==="send-yes") sendIssue();
   else if(a==="send-no") $("#sendConfirm").innerHTML="";
   else if(a==="hf-reset"){ const k=t.dataset.k; await saveSettings(k==="header"?{draftHeader:"",draftIntro:""}:{draftFooter:""}); toast("Back to the template."); }
@@ -1276,7 +1323,7 @@ function openSettings(){
 }
 
 // ───────── routing + boot ─────────
-const ALLV=["home","inbox","board","calendar","tasks","events","contacts","places","issue","sources","team","archive","trash"];
+const ALLV=["home","feedback","inbox","board","calendar","tasks","events","contacts","places","issue","sources","team","archive","trash"];
 function route(){ const h=location.hash.replace("#",""); S.lastSub=S.lastSub||{}; if(h.startsWith("event-")){ if(S.eventId!==h.slice(6)){ S.etab="overview"; S.evConfirmDel=false; } S.view="event"; S.eventId=h.slice(6); window.scrollTo(0,0); } else S.view=ALLV.includes(h)?h:"home"; const sc=sectionOf(S.view); if(sc&&sc!=="home") S.lastSub[sc]=S.view==="event"?"events":S.view==="places"?"board":S.view; closeMenus(); render(); }
 window.addEventListener("hashchange",route);
 window.addEventListener("people-changed",e=>{ S.known=e.detail||[]; S.profiles={}; render(); });
@@ -1293,6 +1340,8 @@ async function boot(){
   const onErr=e=>{ if(e&&e.code==="revoked"){ S.db=null; render(); } };
   const sub=(name,q)=>(q||db.collection(name)).onSnapshot(s=>{ S[name]=s.docs.map(d=>Object.assign({id:d.id},d.data())); S.loaded=S.loaded||{}; S.loaded[name]=true; render(); sweepOrphans(); },onErr);
   ["items","sources","issues","meetings","tasks","plans","contacts","suggestions"].forEach(n=>sub(n));
+  const quiet=(name,key)=>db.collection(name).onSnapshot(s=>{ S[key]=s.docs.map(d=>Object.assign({id:d.id},d.data())); render(); },()=>{});
+  quiet("feedbackEvents","fbEvents"); quiet("feedback","feedback"); quiet("interest","interest");
   sub("activity",db.collection("activity").orderBy("at","desc").limit(80));
   db.doc("meta/settings").onSnapshot(s=>{ S.settings=s.exists? s.data() : null; render(); },onErr);
   db.doc("meta/access").onSnapshot(s=>{ S.access=s.exists? s.data() : null; render(); },onErr);

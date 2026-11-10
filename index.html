@@ -206,6 +206,10 @@ h3{font-family:var(--display);font-weight:600;font-size:16px;margin:0}
 .daypanel{margin-top:16px}
 
 /* issue */
+.vhead{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
+.stars{color:#E2A93B;letter-spacing:1px;font-size:15px}
+.fbr{border-top:1px solid var(--line);padding:10px 0;display:flex;flex-direction:column;gap:4px;font-size:14px}.fbr.new{background:linear-gradient(90deg,var(--accent-soft),transparent 60%);padding-left:8px;border-radius:6px}
+.fbh{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .issue-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px}
 @media (max-width:860px){.issue-grid{grid-template-columns:1fr}}
 .phone{background:#0B141A;border-radius:22px;padding:16px;border:1px solid var(--line)}
@@ -451,11 +455,11 @@ a.segbtn[aria-selected=true]{background:var(--surface);color:var(--ink);box-shad
 })();
 </script>
 
-<script src="app.js?v=202611071000"></script>
-<script type="module" src="./firebase-backend.js?v=202611071000"></script>
+<script src="app.js?v=202611101000"></script>
+<script type="module" src="./firebase-backend.js?v=202611101000"></script>
 <script>
 // Safety net: if the site hasn't started after 15 seconds, explain what to do instead of spinning forever.
-window.__SITE_BUILD="202611071000";
+window.__SITE_BUILD="202611101000";
 window.__bootErrors=[]; window.addEventListener("error",e=>window.__bootErrors.push(e.message||String(e.error||"")));
 setTimeout(()=>{ const m=document.getElementById("main"); if(!m||!/Loading the site|Opening the desk/.test(m.textContent)) return;
   const mismatch=!window.__startApp?"The site's files didn't load (app.js is missing or out of date).":(window.__APP_BUILD&&window.__APP_BUILD!==window.__SITE_BUILD)?"Your browser has a mix of old and new files.":"";
