@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Hebrew:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
-/* Public page: top bar · helix hero · what's here · newsletter (issue picker + cards) · coming up · event feedback · suggest · join band */
+/* Public page: top bar · helix hero · newsletter (issue picker + cards) · coming up · suggest · join band */
 :root{--bg:#F3F6F9;--surface:#fff;--sunk:#E9EEF3;--ink:#0F1D2E;--muted:#58697C;--line:#D8E0E8;--band:#10223B;--band-2:#16304F;--band-ink:#EAF2FA;--band-muted:#9FB3C8;
   --accent:#0C8C7E;--accent-ink:#fff;--accent-soft:#DCF2EE;--coral:#D9503B;--gold:#E2A93B;--helix-a:#36C3B0;--helix-b:#F2735E;--helix-rung:#6E86A3;--shadow:0 1px 2px rgba(15,29,46,.06),0 8px 24px rgba(15,29,46,.06);
   --t-event:#0C8C7E;--t-funding:#B7791F;--t-job:#5B5BD6;--t-research:#2F7BC0;--t-industry:#6B7A8C;--t-opportunity:#D9503B;--t-tool:#8A5CC2;
@@ -91,12 +91,6 @@ h2{font-family:var(--display);font-weight:800;font-size:clamp(26px,3.6vw,34px);m
 .dt .d{font-family:var(--display);font-weight:800;font-size:22px} .dt .mo{font-size:10.5px;text-transform:uppercase;letter-spacing:.1em;color:var(--helix-a)}
 .ev .t{font-weight:600;overflow-wrap:anywhere} .ev .t a{color:var(--ink);text-decoration:none} .ev .s{font-size:13px;color:var(--muted);overflow-wrap:anywhere}
 .ev .acts2{border:0;padding-top:6px}
-/* feedback */
-.fbev{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px;margin-bottom:16px}
-.fbev button{display:flex;flex-direction:column;gap:2px;text-align:start;border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:12px 14px;cursor:pointer;font:inherit;color:var(--ink)}
-.fbev button[aria-pressed=true]{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)} .fbev button small{color:var(--muted)} .fbev button.done{opacity:.6}
-.starsel{display:flex;gap:4px} .starsel button{border:0;background:none;font-size:34px;line-height:1;cursor:pointer;color:var(--line);padding:2px} .starsel button.on{color:var(--gold)}
-.seg3{display:inline-flex;gap:4px;background:var(--sunk);padding:3px;border-radius:10px} .seg3 button{border:0;background:none;padding:7px 14px;border-radius:8px;cursor:pointer;font:inherit;color:var(--muted)} .seg3 button[aria-pressed=true]{background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
 .split{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px;align-items:start} @media (max-width:860px){.split{grid-template-columns:1fr}}
 label{display:flex;flex-direction:column;gap:5px;font-size:13px;color:var(--muted);font-weight:500;margin-bottom:12px}
 input,textarea{font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-width:0;width:100%}
@@ -115,7 +109,7 @@ footer{color:var(--muted);font-size:13px;padding-block:28px 40px;display:flex;ga
 <body>
 <header class="top"><div class="wrap">
   <a class="brand" href="#"><img src="icon-192.png" alt=""><span>Nucleate<small>TECHNION BRANCH</small></span></a>
-  <nav class="toplinks" aria-label="Sections"><a href="#newsletter">Newsletter</a><a href="#events">Coming up</a><a href="#feedback" id="navFb">Rate an event</a><a href="#suggest">Suggest</a></nav>
+  <nav class="toplinks" aria-label="Sections"><a href="#newsletter">Newsletter</a><a href="#events">Coming up</a><a href="#suggest">Suggest</a></nav>
   <a class="btn wa" id="joinTop" href="#" target="_blank" rel="noopener">Join on WhatsApp</a>
 </div></header>
 
@@ -139,22 +133,6 @@ footer{color:var(--muted);font-size:13px;padding-block:28px 40px;display:flex;ga
     <div class="eyebrow">Calendar</div><h2>Coming up</h2>
     <p class="sub">Upcoming events from recent issues.</p>
     <div id="upcoming"><div class="empty">Loading…</div></div>
-  </section>
-
-  <section class="blk" id="feedback">
-    <div class="eyebrow">Event feedback</div><h2>Were you at one of our events?</h2>
-    <p class="sub">Tell us how it was. It takes 30 seconds and only the organizing team sees your answers.</p>
-    <div class="fbev" id="fbEvents"></div>
-    <form class="panel" id="fbForm" novalidate hidden>
-      <h3 id="fbTitle" dir="auto" style="margin:0 0 10px;font-family:var(--display)"></h3>
-      <div style="margin-bottom:14px"><div style="font-size:13px;color:var(--muted);font-weight:500;margin-bottom:4px">How was it? *</div><div class="starsel" id="fbStars" role="radiogroup" aria-label="Rating">
-        <button type="button" data-r="1" role="radio" aria-label="1 star">★</button><button type="button" data-r="2" role="radio" aria-label="2 stars">★</button><button type="button" data-r="3" role="radio" aria-label="3 stars">★</button><button type="button" data-r="4" role="radio" aria-label="4 stars">★</button><button type="button" data-r="5" role="radio" aria-label="5 stars">★</button></div></div>
-      <div class="two"><label>What was good?<textarea id="fbGood" rows="3" dir="auto" maxlength="1000"></textarea></label><label>What could be better?<textarea id="fbImprove" rows="3" dir="auto" maxlength="1000"></textarea></label></div>
-      <div style="margin-bottom:14px"><div style="font-size:13px;color:var(--muted);font-weight:500;margin-bottom:6px">Would you come to our next event?</div><div class="seg3" id="fbAgain"><button type="button" data-v="yes">Yes</button><button type="button" data-v="maybe">Maybe</button><button type="button" data-v="no">No</button></div></div>
-      <div class="two"><label>Name (optional)<input id="fbName" dir="auto" maxlength="100"></label><label>Email, if you'd like a reply (optional)<input id="fbEmail" type="email" maxlength="200"></label></div>
-      <div class="hp" aria-hidden="true"><label>Leave this empty<input id="fbHp" tabindex="-1" autocomplete="off"></label></div>
-      <button class="btn pri" type="submit">Send feedback</button><div id="fbMsg"></div>
-    </form>
   </section>
 
   <section class="blk" id="suggest">
@@ -313,32 +291,6 @@ document.addEventListener("click", async e => {
   if (t.dataset.int) { const [is] = t.dataset.int.split(":"); const it = ITEMS[t.dataset.int]; if (it) interested(is, it, t); return; }
   if (!t.closest(".ddm")) closeDD(); else setTimeout(() => closeDD(), 0);
 });
-
-// ── event feedback ──
-let fbList = [], fbSel = null, rating = 0, again = "";
-const doneFb = new Set(store.get("nt-feedback", []));
-function renderFbEvents() { $("#fbEvents").innerHTML = fbList.map(ev => `<button type="button" data-fbev="${esc(ev.id)}" aria-pressed="${fbSel === ev.id}" class="${doneFb.has(ev.id) ? "done" : ""}"><b dir="auto">${esc(ev.title)}</b><small>${esc([fmtD(ev.date), ev.location].filter(Boolean).join(" · "))}${doneFb.has(ev.id) ? " · ✓ you sent feedback" : ""}</small></button>`).join(""); }
-function pickFb(id) { fbSel = id; rating = 0; again = ""; const ev = fbList.find(x => x.id === id); renderFbEvents(); const f = $("#fbForm"); f.hidden = !ev; if (!ev) return; f.reset(); $("#fbMsg").innerHTML = ""; $("#fbTitle").textContent = ev.title;
-  document.querySelectorAll("#fbStars button").forEach(b => { b.classList.remove("on"); b.setAttribute("aria-checked", "false"); }); document.querySelectorAll("#fbAgain button").forEach(b => b.setAttribute("aria-pressed", "false"));
-  if (doneFb.has(id)) $("#fbMsg").innerHTML = `<div class="msg">You already sent feedback for this event on this device. Thanks!</div>`; }
-try {
-  const s = await getDocs(collection(db, "feedbackEvents")); const today = new Date(); today.setHours(23, 59, 59, 0); const cutoff = Date.now() - 120 * 864e5;
-  fbList = s.docs.map(d => ({ id: d.id, ...d.data() })).filter(e => e.open && (!e.date || (parseD(e.date) <= today && parseD(e.date).getTime() >= cutoff))).sort((a, b) => (b.date || "") < (a.date || "") ? -1 : 1);
-  if (fbList.length) { renderFbEvents(); if (fbList.length === 1) pickFb(fbList[0].id); }
-  else $("#fbEvents").innerHTML = `<div class="empty">No events are open for rating right now. After our next event, you'll be able to rate it here.</div>`;
-  if (location.hash === "#feedback") setTimeout(() => $("#feedback").scrollIntoView(), 250);
-} catch { $("#fbEvents").innerHTML = `<div class="empty">Couldn't load events right now. Try again in a moment.</div>`; }
-$("#fbEvents").addEventListener("click", e => { const b = e.target.closest("[data-fbev]"); if (b) pickFb(b.dataset.fbev); });
-$("#fbStars").addEventListener("click", e => { const b = e.target.closest("[data-r]"); if (!b) return; rating = +b.dataset.r; document.querySelectorAll("#fbStars button").forEach(x => { const on = +x.dataset.r <= rating; x.classList.toggle("on", on); x.setAttribute("aria-checked", String(+x.dataset.r === rating)); }); });
-$("#fbAgain").addEventListener("click", e => { const b = e.target.closest("[data-v]"); if (!b) return; again = b.dataset.v; document.querySelectorAll("#fbAgain button").forEach(x => x.setAttribute("aria-pressed", String(x === b))); });
-$("#fbForm").addEventListener("submit", async e => { e.preventDefault(); const v = id => $("#" + id).value.trim(); const msg = $("#fbMsg");
-  if (v("fbHp")) return; if (!fbSel) return; if (doneFb.has(fbSel)) { msg.innerHTML = `<div class="msg">You already sent feedback for this event. Thanks!</div>`; return; }
-  if (!rating) { msg.innerHTML = `<div class="msg err">Pick 1 to 5 stars first.</div>`; return; }
-  const ev = fbList.find(x => x.id === fbSel); const btn = $("#fbForm button[type=submit]"); btn.disabled = true;
-  try { await addDoc(collection(db, "feedback"), { eventId: fbSel, eventTitle: String(ev.title || "").slice(0, 200), rating, good: v("fbGood").slice(0, 1000), improve: v("fbImprove").slice(0, 1000), again, name: v("fbName").slice(0, 100), email: v("fbEmail").slice(0, 200), createdAt: Date.now() });
-    doneFb.add(fbSel); store.set("nt-feedback", [...doneFb]); renderFbEvents(); $("#fbForm").reset(); msg.innerHTML = `<div class="msg">Thank you! Your feedback goes straight to the organizing team. 🙏</div>`; }
-  catch { msg.innerHTML = `<div class="msg err">Couldn't send it. Feedback for this event may have closed, or your connection dropped. Try again in a moment.</div>`; }
-  btn.disabled = false; });
 
 // ── suggestions ──
 const form = $("#suggestForm"), msg = $("#sMsg"); let sent = 0;
