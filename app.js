@@ -147,7 +147,7 @@ async function purgeOld(){ if(S.purged||!isAdmin()) return; S.purged=true; const
 
 const whenExists = (col,id) => new Promise(res=>{ let n=0; const tick=()=>{ if(S[col].some(x=>x.id===id)||++n>40) return res(); setTimeout(tick,50); }; tick(); });
 // ───────── render loop ─────────
-window.__APP_BUILD="202611101000";
+window.__APP_BUILD="202611111000";
 let raf=0, renderFails=0; function render(){ cancelAnimationFrame(raf); raf=requestAnimationFrame(()=>{ try{ doRender(); renderFails=0; }catch(err){ console.error(err); if(++renderFails<3) return; const m=$("#main"); if(m) m.innerHTML=`<div class="empty"><b>Something went wrong showing this page</b>Try a hard refresh (Cmd+Shift+R on Mac, Ctrl+Shift+R on Windows). If it keeps happening, send a screenshot of this message to Dan.<br><br><code style="font-size:12px">${esc(String(err&&err.message||err))}</code><br><br><button class="btn pri" onclick="location.reload()">Reload</button></div>`; } }); }
 const NAV=[["home","Home",[]],["news","Newsletter",[["board","Pipeline"],["issue","This issue"],["sources","Sources"],["inbox","Suggestions"],["archive","Archive"]]],["events","Events",[["events","Event planner"],["calendar","Calendar"],["feedback","Feedback"]]],["team","Team",[["tasks","Tasks"],["contacts","Contacts"],["team","People & access"]]]];
 const sectionOf = v => v==="home"?"home":["board","issue","sources","inbox","archive","places"].includes(v)?"news":["events","event","calendar","feedback"].includes(v)?"events":["tasks","contacts","team"].includes(v)?"team":"";
@@ -1012,12 +1012,19 @@ function fbSummary(list){ if(!list.length) return null; const avg=list.reduce((a
   return {n:list.length,avg,again:Math.round(100*yes/list.length)}; }
 function fbRow(f){ return `<div class="fbr${f.seen?"":" new"}"><div class="fbh">${stars(+f.rating||0)}<span class="hint">${esc(f.name||"Anonymous")}${f.email?` · <a href="mailto:${esc(f.email)}">${esc(f.email)}</a>`:""} · ${agoPhrase(f.createdAt||Date.now())}</span>${f.again?`<span class="chip ${f.again==="yes"?"ok":f.again==="no"?"hot":""}">${f.again==="yes"?"Would come again":f.again==="no"?"Wouldn't come again":"Maybe again"}</span>`:""}<span style="flex:1"></span><button class="btn sm ghost danger" data-act="fb-del" data-id="${esc(f.id)}" aria-label="Delete response">✕</button></div>
   ${f.good?`<div dir="auto"><b>Good:</b> ${esc(f.good)}</div>`:""}${f.improve?`<div dir="auto"><b>Improve:</b> ${esc(f.improve)}</div>`:""}</div>`; }
+// Once an event's date has passed, it shows up on the public page for rating by itself (for 30 days),
+// unless someone closed feedback for it. Event title/date changes are copied over too.
+const fbTried=new Set();
+async function autoFeedback(){ if(!S.canWrite||!S.db||!(S.loaded||{}).plans||!(S.loaded||{}).fbEvents) return; const t=todayS(), from=shiftS(t,-30);
+  for(const p of S.plans){ if(p.deleted||!p.date||fbTried.has(p.id)) continue; const fe=S.fbEvents.find(x=>x.id===p.id);
+    if(!fe&&p.date<=t&&p.date>=from){ fbTried.add(p.id); try{ await S.db.collection("feedbackEvents").doc(p.id).set({title:p.title||"",date:p.date,location:p.location||"",open:true,updatedAt:Date.now()}); }catch(e){} }
+    else if(fe&&(fe.title!==(p.title||"")||fe.date!==p.date||(fe.location||"")!==(p.location||""))){ fbTried.add(p.id); try{ await S.db.collection("feedbackEvents").doc(p.id).update({title:p.title||"",date:p.date,location:p.location||"",updatedAt:Date.now()}); }catch(e){} } } }
 async function setFeedbackOpen(p, open){ if(!p) return;
   try{ await S.db.collection("feedbackEvents").doc(p.id).set({title:p.title||"",date:p.date||"",location:p.location||"",open,updatedAt:Date.now()});
-    await evUpdate(p,{feedbackOpen:open},open?"opened feedback for":"closed feedback for"); toast(open?"Feedback is open on the public page.":"Feedback closed. Responses you got are kept."); }catch(e){ writeErr(e); } }
+    logAct(open?"opened feedback for":"closed feedback for",p.title); toast(open?"Feedback is open on the public page.":"Feedback closed. Responses you got are kept."); }catch(e){ writeErr(e); } }
 function fbPanel(p){ const list=fbFor(p.id); const sm=fbSummary(list); const open=!!(S.fbEvents.find(x=>x.id===p.id)||{}).open; const past=!p.date||daysTo(p.date)<=0;
   return `<div class="panel" style="margin-bottom:16px"><div class="panel-h"><h3>Feedback from attendees</h3>${open?`<span class="chip ok">Open on the public page</span>`:""}</div>
-    <p class="sub" style="margin:0 0 10px">${open?"Attendees can rate this event on the public page. Share the link in the WhatsApp group after the event.":past?"Let attendees rate this event on the public page (stars, what was good, what to improve). Only admins see the answers.":"You can open feedback once the event day arrives."}</p>
+    <p class="sub" style="margin:0 0 10px">${open?"Attendees can rate this event on the public page. Share the link in the WhatsApp group after the event.":(S.fbEvents.find(x=>x.id===p.id)?"Feedback is closed for this event.":past?"Let attendees rate this event on the public page (stars, what was good, what to improve). Only admins see the answers.":"From the event day on, it appears on the public page for rating by itself. Only admins see the answers.")}</p>
     <div class="toolbar" style="margin:0 0 ${sm?"12px":"0"}">${open?`<button class="btn sm" data-act="fb-close">Close feedback</button><button class="btn sm" data-act="copy-fb">Copy the feedback link</button>`:`<button class="btn sm ${past?"pri":""}" data-act="fb-open" ${past?"":"disabled"}>Open feedback on the public page</button>`}</div>
     ${isAdmin()?(sm?`<div class="tiles" style="grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:10px"><div class="tile"><span class="v small">${sm.avg.toFixed(1)} ★</span><span class="l">average</span></div><div class="tile"><span class="v small">${sm.n}</span><span class="l">responses</span></div><div class="tile"><span class="v small">${sm.again}%</span><span class="l">would come again</span></div></div>${list.slice(0,20).map(fbRow).join("")}`:(open?`<div class="colempty">No responses yet.</div>`:"")):(sm?`<div class="hint">${plural(sm.n,"response")} so far. Admins can read them.</div>`:"")}</div>`; }
 function vFeedback(){
@@ -1338,9 +1345,9 @@ async function boot(){
   if(!S.meId) S.canWrite=false;
   if(!db){ render(); return; }
   const onErr=e=>{ if(e&&e.code==="revoked"){ S.db=null; render(); } };
-  const sub=(name,q)=>(q||db.collection(name)).onSnapshot(s=>{ S[name]=s.docs.map(d=>Object.assign({id:d.id},d.data())); S.loaded=S.loaded||{}; S.loaded[name]=true; render(); sweepOrphans(); },onErr);
+  const sub=(name,q)=>(q||db.collection(name)).onSnapshot(s=>{ S[name]=s.docs.map(d=>Object.assign({id:d.id},d.data())); S.loaded=S.loaded||{}; S.loaded[name]=true; render(); sweepOrphans(); if(name==="plans") autoFeedback(); },onErr);
   ["items","sources","issues","meetings","tasks","plans","contacts","suggestions"].forEach(n=>sub(n));
-  const quiet=(name,key)=>db.collection(name).onSnapshot(s=>{ S[key]=s.docs.map(d=>Object.assign({id:d.id},d.data())); render(); },()=>{});
+  const quiet=(name,key)=>db.collection(name).onSnapshot(s=>{ S[key]=s.docs.map(d=>Object.assign({id:d.id},d.data())); S.loaded=S.loaded||{}; S.loaded[key]=true; render(); autoFeedback(); },()=>{});
   quiet("feedbackEvents","fbEvents"); quiet("feedback","feedback"); quiet("interest","interest");
   sub("activity",db.collection("activity").orderBy("at","desc").limit(80));
   db.doc("meta/settings").onSnapshot(s=>{ S.settings=s.exists? s.data() : null; render(); },onErr);

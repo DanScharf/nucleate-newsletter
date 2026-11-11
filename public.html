@@ -115,7 +115,7 @@ footer{color:var(--muted);font-size:13px;padding-block:28px 40px;display:flex;ga
 <body>
 <header class="top"><div class="wrap">
   <a class="brand" href="#"><img src="icon-192.png" alt=""><span>Nucleate<small>TECHNION BRANCH</small></span></a>
-  <nav class="toplinks" aria-label="Sections"><a href="#newsletter">Newsletter</a><a href="#events">Coming up</a><a href="#feedback" id="navFb" hidden>Event feedback</a><a href="#suggest">Suggest</a></nav>
+  <nav class="toplinks" aria-label="Sections"><a href="#newsletter">Newsletter</a><a href="#events">Coming up</a><a href="#feedback" id="navFb">Rate an event</a><a href="#suggest">Suggest</a></nav>
   <a class="btn wa" id="joinTop" href="#" target="_blank" rel="noopener">Join on WhatsApp</a>
 </div></header>
 
@@ -141,7 +141,7 @@ footer{color:var(--muted);font-size:13px;padding-block:28px 40px;display:flex;ga
     <div id="upcoming"><div class="empty">Loading…</div></div>
   </section>
 
-  <section class="blk" id="feedback" hidden>
+  <section class="blk" id="feedback">
     <div class="eyebrow">Event feedback</div><h2>Were you at one of our events?</h2>
     <p class="sub">Tell us how it was. It takes 30 seconds and only the organizing team sees your answers.</p>
     <div class="fbev" id="fbEvents"></div>
@@ -324,10 +324,10 @@ function pickFb(id) { fbSel = id; rating = 0; again = ""; const ev = fbList.find
 try {
   const s = await getDocs(collection(db, "feedbackEvents")); const today = new Date(); today.setHours(23, 59, 59, 0); const cutoff = Date.now() - 120 * 864e5;
   fbList = s.docs.map(d => ({ id: d.id, ...d.data() })).filter(e => e.open && (!e.date || (parseD(e.date) <= today && parseD(e.date).getTime() >= cutoff))).sort((a, b) => (b.date || "") < (a.date || "") ? -1 : 1);
-  if (fbList.length) { $("#feedback").hidden = false; $("#navFb").hidden = false; renderFbEvents(); if (fbList.length === 1) pickFb(fbList[0].id); }
-  else if (location.hash === "#feedback") { $("#feedback").hidden = false; $("#fbEvents").innerHTML = `<div class="empty">No events are open for feedback right now.</div>`; }
+  if (fbList.length) { renderFbEvents(); if (fbList.length === 1) pickFb(fbList[0].id); }
+  else $("#fbEvents").innerHTML = `<div class="empty">No events are open for rating right now. After our next event, you'll be able to rate it here.</div>`;
   if (location.hash === "#feedback") setTimeout(() => $("#feedback").scrollIntoView(), 250);
-} catch { }
+} catch { $("#fbEvents").innerHTML = `<div class="empty">Couldn't load events right now. Try again in a moment.</div>`; }
 $("#fbEvents").addEventListener("click", e => { const b = e.target.closest("[data-fbev]"); if (b) pickFb(b.dataset.fbev); });
 $("#fbStars").addEventListener("click", e => { const b = e.target.closest("[data-r]"); if (!b) return; rating = +b.dataset.r; document.querySelectorAll("#fbStars button").forEach(x => { const on = +x.dataset.r <= rating; x.classList.toggle("on", on); x.setAttribute("aria-checked", String(+x.dataset.r === rating)); }); });
 $("#fbAgain").addEventListener("click", e => { const b = e.target.closest("[data-v]"); if (!b) return; again = b.dataset.v; document.querySelectorAll("#fbAgain button").forEach(x => x.setAttribute("aria-pressed", String(x === b))); });
