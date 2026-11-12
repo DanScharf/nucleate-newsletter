@@ -20,7 +20,7 @@
   --accent:#0C8C7E; --accent-ink:#FFFFFF; --accent-soft:#DCF2EE;
   --coral:#D9503B; --coral-soft:#FBE5E0; --warn:#A86500; --warn-soft:#FBF0D9; --ok:#1F7A55; --ok-soft:#DFF1E8;
   --helix-a:#36C3B0; --helix-b:#F2735E; --helix-rung:#6E86A3;
-  --t-event:#0C8C7E; --t-funding:#B7791F; --t-job:#5B5BD6; --t-research:#2F7BC0; --t-industry:#6B7A8C; --t-opportunity:#D9503B; --t-tool:#8A5CC2;
+  --t-event:#0C8C7E; --t-funding:#B7791F; --t-job:#5B5BD6; --t-scholarship:#C2477A; --t-research:#2F7BC0; --t-industry:#6B7A8C; --t-opportunity:#D9503B; --t-tool:#8A5CC2;
   --m-meeting:#2F7BC0; --m-call:#5B5BD6; --m-idea:#D9503B; --m-other:#6B7A8C; --m-plan:#B7791F;
   --display:"Bricolage Grotesque","IBM Plex Sans",system-ui,sans-serif;
   --body:"IBM Plex Sans","IBM Plex Sans Hebrew",system-ui,-apple-system,"Segoe UI",sans-serif;
@@ -34,7 +34,7 @@
   --band:#08111C; --band-2:#0F1E30; --band-ink:#EAF2FA; --band-muted:#8FA1B4;
   --accent:#3CCFBC; --accent-ink:#06201C; --accent-soft:#0F302C; --coral:#FF7C66; --coral-soft:#3A1E19; --warn:#F2BE5C; --warn-soft:#33280F; --ok:#6FD3A5; --ok-soft:#14302A;
   --helix-rung:#4A607A;
-  --t-event:#3CCFBC; --t-funding:#F2BE5C; --t-job:#9C9CF5; --t-research:#6FB2F0; --t-industry:#A3B1C2; --t-opportunity:#FF7C66; --t-tool:#C29CF0;
+  --t-event:#3CCFBC; --t-funding:#F2BE5C; --t-job:#9C9CF5; --t-scholarship:#EE86B2; --t-research:#6FB2F0; --t-industry:#A3B1C2; --t-opportunity:#FF7C66; --t-tool:#C29CF0;
   --m-meeting:#6FB2F0; --m-call:#9C9CF5; --m-idea:#FF7C66; --m-other:#A3B1C2; --m-plan:#F2BE5C;
   --shadow:0 1px 2px rgba(0,0,0,.3); color-scheme:dark}}
 :root[data-theme="dark"]{
@@ -42,7 +42,7 @@
   --band:#08111C; --band-2:#0F1E30; --band-ink:#EAF2FA; --band-muted:#8FA1B4;
   --accent:#3CCFBC; --accent-ink:#06201C; --accent-soft:#0F302C; --coral:#FF7C66; --coral-soft:#3A1E19; --warn:#F2BE5C; --warn-soft:#33280F; --ok:#6FD3A5; --ok-soft:#14302A;
   --helix-rung:#4A607A;
-  --t-event:#3CCFBC; --t-funding:#F2BE5C; --t-job:#9C9CF5; --t-research:#6FB2F0; --t-industry:#A3B1C2; --t-opportunity:#FF7C66; --t-tool:#C29CF0;
+  --t-event:#3CCFBC; --t-funding:#F2BE5C; --t-job:#9C9CF5; --t-scholarship:#EE86B2; --t-research:#6FB2F0; --t-industry:#A3B1C2; --t-opportunity:#FF7C66; --t-tool:#C29CF0;
   --m-meeting:#6FB2F0; --m-call:#9C9CF5; --m-idea:#FF7C66; --m-other:#A3B1C2; --m-plan:#F2BE5C;
   --shadow:0 1px 2px rgba(0,0,0,.3); color-scheme:dark}
 *{box-sizing:border-box}
@@ -207,6 +207,10 @@ h3{font-family:var(--display);font-weight:600;font-size:16px;margin:0}
 
 /* issue */
 .vhead{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
+.kindh{font-size:13.5px;font-weight:700;color:var(--ink);margin:12px 0 0;padding-top:8px;border-top:2px solid var(--line)}
+.lvlh{font-size:12.5px;font-weight:600;color:var(--muted);margin:8px 0 2px;text-transform:none}
+.lvls{display:inline-flex;gap:3px;margin-left:auto}.lv{width:26px;height:26px;border-radius:7px;border:1px solid var(--line);background:var(--surface);color:var(--muted);font:inherit;font-size:12px;font-weight:600;cursor:pointer;padding:0}
+.lv[aria-pressed=true]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
 .issue-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px}
 @media (max-width:860px){.issue-grid{grid-template-columns:1fr}}
 .phone{background:#0B141A;border-radius:22px;padding:16px;border:1px solid var(--line)}
@@ -452,11 +456,11 @@ a.segbtn[aria-selected=true]{background:var(--surface);color:var(--ink);box-shad
 })();
 </script>
 
-<script src="app.js?v=202611111200"></script>
-<script type="module" src="./firebase-backend.js?v=202611111200"></script>
+<script src="app.js?v=202611121400"></script>
+<script type="module" src="./firebase-backend.js?v=202611121400"></script>
 <script>
 // Safety net: if the site hasn't started after 15 seconds, explain what to do instead of spinning forever.
-window.__SITE_BUILD="202611111200";
+window.__SITE_BUILD="202611121400";
 window.__bootErrors=[]; window.addEventListener("error",e=>window.__bootErrors.push(e.message||String(e.error||"")));
 setTimeout(()=>{ const m=document.getElementById("main"); if(!m||!/Loading the site|Opening the desk/.test(m.textContent)) return;
   const mismatch=!window.__startApp?"The site's files didn't load (app.js is missing or out of date).":(window.__APP_BUILD&&window.__APP_BUILD!==window.__SITE_BUILD)?"Your browser has a mix of old and new files.":"";

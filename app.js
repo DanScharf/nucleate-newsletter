@@ -4,11 +4,29 @@
 // ───────── constants ─────────
 const TYPES = [
   ["event","Event","--t-event"],["funding","Funding / Grant","--t-funding"],["job","Job / Internship","--t-job"],
-  ["research","Research news","--t-research"],["industry","Industry news","--t-industry"],["opportunity","Call for applications","--t-opportunity"],["tool","Tool / Resource","--t-tool"]
+  ["scholarship","Research scholarship","--t-scholarship"],["research","Research news","--t-research"],["industry","Industry news","--t-industry"],["opportunity","Call for applications","--t-opportunity"],["tool","Tool / Resource","--t-tool"]
 ];
 const TYPE = Object.fromEntries(TYPES.map(([k,l,c])=>[k,{label:l,color:`var(${c})`}]));
 const MKINDS = [["meeting","Team meeting","--m-meeting"],["call","Call / partner meeting","--m-call"],["idea","Potential event","--m-idea"],["other","Other","--m-other"]];
 const MKIND = Object.fromEntries(MKINDS.map(([k,l,c])=>[k,{label:l,color:`var(${c})`}]));
+// Study level for opportunities: they're grouped by it inside the Opportunities section.
+const LEVELS = [["bsc","Bachelor's"],["msc","Master's"],["phd","PhD"]];
+const LEVEL_TYPES = ["scholarship","funding","job","opportunity"];
+const lvls = i => LEVELS.map(l=>l[0]).filter(k=>(i.levels||[]).includes(k));
+const levelKey = i => lvls(i).join("+");
+const levelName = k => k? k.split("+").map(x=>(LEVELS.find(l=>l[0]===x)||[0,x])[1]).join(" & ") : "All levels";
+// Split a section's items into level groups (All levels first, then Bachelor's, Master's, PhD, then mixes). One group with no heading when nobody set a level.
+function levelGroups(items){ if(!items.some(i=>lvls(i).length)) return [{key:"",label:"",items}];
+  const keys=[...new Set(items.map(levelKey))]; const rank=k=>k===""?-1:LEVELS.findIndex(l=>l[0]===k.split("+")[0])*10+k.split("+").length;
+  return keys.sort((a,b)=>rank(a)-rank(b)).map(k=>({key:k,label:levelName(k),items:items.filter(i=>levelKey(i)===k)})); }
+// Inside Opportunities: funding & scholarships first, then jobs & programs; each split by level.
+const OPP_KINDS = [["fund","💸 Funding & scholarships",["scholarship","funding"]],["jobs","💼 Jobs & programs",null]];
+const kindOf = i => (OPP_KINDS.find(k=>k[2]&&k[2].includes(i.type))||OPP_KINDS[OPP_KINDS.length-1])[0];
+const oppKey = i => kindOf(i)+"|"+levelKey(i);
+function oppGroups(items){ const kinds=OPP_KINDS.filter(k=>items.some(i=>kindOf(i)===k[0])); const many=kinds.length>1; const out=[];
+  kinds.forEach(([k,label])=>levelGroups(items.filter(i=>kindOf(i)===k)).forEach((g,ix)=>out.push({...g,key:k+"|"+g.key,kindLabel:many&&ix===0?label:""}))); return out; }
+const REGIONS = [["israel","🇮🇱 In Israel"],["abroad","🌍 Abroad"]];
+const regionLabel = r => (REGIONS.find(x=>x[0]===r)||[])[1]||"";
 const STAGES = [["found","Found"],["shortlist","Shortlisted"],["writing","Writing"],["issue","In this issue"],["archived","Archived"]];
 const STAGE = Object.fromEntries(STAGES);
 const PSTAGES = [["idea","Idea"],["planning","Planning"],["confirmed","Confirmed"],["done","Done"]];
@@ -19,7 +37,7 @@ const DEFAULT_CHECK = ["Venue booked","Speaker / host confirmed","Poster designe
 const SECTIONS = [
   {key:"soon",title:"⏰ Coming up next week",types:null},
   {key:"events",title:"📅 Events",types:["event"]},
-  {key:"opps",title:"💰 Opportunities",types:["funding","job","opportunity"]},
+  {key:"opps",title:"💰 Opportunities",types:["scholarship","funding","job","opportunity"]},
   {key:"science",title:"🧪 Science & industry",types:["research","industry"]},
   {key:"resources",title:"🧰 Resources",types:["tool"]},
 ];
@@ -147,7 +165,7 @@ async function purgeOld(){ if(S.purged||!isAdmin()) return; S.purged=true; const
 
 const whenExists = (col,id) => new Promise(res=>{ let n=0; const tick=()=>{ if(S[col].some(x=>x.id===id)||++n>40) return res(); setTimeout(tick,50); }; tick(); });
 // ───────── render loop ─────────
-window.__APP_BUILD="202611111200";
+window.__APP_BUILD="202611121400";
 let raf=0, renderFails=0; function render(){ cancelAnimationFrame(raf); raf=requestAnimationFrame(()=>{ try{ doRender(); renderFails=0; }catch(err){ console.error(err); if(++renderFails<3) return; const m=$("#main"); if(m) m.innerHTML=`<div class="empty"><b>Something went wrong showing this page</b>Try a hard refresh (Cmd+Shift+R on Mac, Ctrl+Shift+R on Windows). If it keeps happening, send a screenshot of this message to Dan.<br><br><code style="font-size:12px">${esc(String(err&&err.message||err))}</code><br><br><button class="btn pri" onclick="location.reload()">Reload</button></div>`; } }); }
 const NAV=[["home","Home",[]],["news","Newsletter",[["board","Pipeline"],["issue","This issue"],["sources","Sources"],["inbox","Suggestions"],["archive","Archive"]]],["events","Events",[["events","Event planner"],["calendar","Calendar"]]],["team","Team",[["tasks","Tasks"],["contacts","Contacts"],["team","People & access"]]]];
 const sectionOf = v => v==="home"?"home":["board","issue","sources","inbox","archive","places"].includes(v)?"news":["events","event","calendar"].includes(v)?"events":["tasks","contacts","team"].includes(v)?"team":"";
@@ -330,7 +348,7 @@ function vInbox(){ const s=A("suggestions").sort((a,b)=>(b.createdAt||0)-(a.crea
 function card(i){
   const my=(i.votes||{})[S.meId]; const cc=Object.keys(i.comments||{}).length; const ns=nextStage(i.status);
   return `<div class="card" data-open="${esc(i.id)}" draggable="${S.canWrite}" data-id="${esc(i.id)}" style="--tc:${tcol(i.type)}">
-    <div class="meta"><span class="chip type" style="--tc:${tcol(i.type)}"><span class="dot"></span>${esc(tlabel(i.type))}</span>${dateChip(i)}${i.recurring&&i.recurring!=="none"?`<span class="chip">↻ ${esc(i.recurring)}</span>`:""}</div>
+    <div class="meta"><span class="chip type" style="--tc:${tcol(i.type)}"><span class="dot"></span>${esc(tlabel(i.type))}</span>${dateChip(i)}${i.recurring&&i.recurring!=="none"?`<span class="chip">↻ ${esc(i.recurring)}</span>`:""}${i.region?`<span class="chip">${esc(regionLabel(i.region))}</span>`:""}${lvls(i).length?`<span class="chip">🎓 ${esc(levelName(levelKey(i)))}</span>`:""}</div>
     <div class="t" dir="auto">${esc(i.title||"Untitled")}</div>
     ${i.location?`<div class="meta" dir="auto">📍 ${esc(i.location)}</div>`:""}
     <div class="foot"><div class="meta">${avImg(i.addedBy)}${iOwners(i).filter(o=>o!==i.addedBy).length?" ✎ "+iOwners(i).filter(o=>o!==i.addedBy).map(avImg).join(""):""}<span>${esc(host(i.url))}</span>${cc?`<span>💬 ${cc}</span>`:""}</div>
@@ -415,12 +433,13 @@ function issueItems(){
 }
 function itemText(i){
   const lines=[`▪️ *${(i.title||"").trim()}*`]; const body=(i.summary||i.why||"").trim(); if(body) lines.push(body);
-  const meta=[]; if(i.date) meta.push("🗓 "+fmtDW(i.date)); if(i.location) meta.push("📍 "+i.location); else if(i.online) meta.push("🌐 Online"); if(i.deadline&&daysTo(i.deadline)>=0) meta.push("⏳ Apply by "+fmtDW(i.deadline));
+  const meta=[]; if(i.region) meta.push(regionLabel(i.region)); if(i.date) meta.push("🗓 "+fmtDW(i.date)); if(i.location) meta.push("📍 "+i.location); else if(i.online) meta.push("🌐 Online"); if(i.deadline&&daysTo(i.deadline)>=0) meta.push("⏳ Apply by "+fmtDW(i.deadline));
   if(meta.length) lines.push("_"+meta.join(" · ")+"_"); if(i.url) lines.push("🔗 "+i.url); return lines.join("\n");
 }
 function composeText(){
   const st=settings(); const secs=issueItems(); const parts=[];
-  SECTIONS.forEach(s=>{ const its=secs[s.key]; if(its.length) parts.push(`━━━━━━━━━━\n*${s.title}*\n\n`+its.map(itemText).join("\n\n")); });
+  SECTIONS.forEach(s=>{ const its=secs[s.key]; if(!its.length) return; const gs=s.key==="opps"? oppGroups(its) : [{label:"",items:its}];
+    parts.push(`━━━━━━━━━━\n*${s.title}*\n\n`+gs.map(g=>(g.kindLabel?g.kindLabel.replace(/^(\S+)\s+(.*)$/,"$1 *$2*")+"\n\n":"")+(g.label?`🎓 _${g.label}_\n\n`:"")+g.items.map(itemText).join("\n\n")).join("\n\n")); });
   const head=issueHeader(st).trim(), foot=issueFooter(st).trim();
   let t=head; if(parts.length) t+=(t?"\n":"")+parts.join("\n\n"); if(foot) t+=(t?"\n\n":"")+"━━━━━━━━━━\n"+foot; return t;
 }
@@ -435,7 +454,8 @@ function vIssue(){
   const left=`<div class="list" style="gap:12px">
     ${hfBox("header","Opening (header)",issueHeader(st),!!(st.draftHeader||"").trim(),3)}
     ${SECTIONS.map(s=>`<div class="sec"><div class="sec-h"><h3>${s.title}</h3>${s.key==="soon"?`<span class="eyebrow">auto: within 7 days</span>`:ownerSel(s.key)}</div>
-      ${secs[s.key].length? secs[s.key].map((i,ix)=>`<div class="mini"><span class="dot" style="color:${tcol(i.type)}"></span><span class="t" dir="auto">${esc(i.title)}</span>${S.canWrite?`<button class="btn sm ghost" data-move="${esc(i.id)}" data-sec="${s.key}" data-dir="-1" aria-label="Move up" ${ix===0?"disabled":""}>↑</button><button class="btn sm ghost" data-move="${esc(i.id)}" data-sec="${s.key}" data-dir="1" aria-label="Move down" ${ix===secs[s.key].length-1?"disabled":""}>↓</button>`:""}<button class="btn sm" data-open="${esc(i.id)}">Edit</button></div>`).join("") : `<div class="colempty">No items. Move cards to "In this issue" on the pipeline.</div>`}
+      ${s.key==="opps"&&secs[s.key].length?`<div class="hint" style="margin:-2px 0 6px">Tap B / M / P to mark who it's for (Bachelor's, Master's, PhD). Items are grouped by level in the message. None marked = all levels.</div>`:""}
+      ${secs[s.key].length? (s.key==="opps"?oppGroups(secs[s.key]):[{key:"",label:"",items:secs[s.key]}]).map(g=>(g.kindLabel?`<div class="kindh">${esc(g.kindLabel)}</div>`:"")+(g.label?`<div class="lvlh">🎓 ${esc(g.label)}</div>`:"")+g.items.map((i,ix)=>`<div class="mini"><span class="dot" style="color:${tcol(i.type)}"></span><span class="t" dir="auto">${esc(i.title)}</span>${s.key==="opps"?`<span class="lvls">${LEVELS.map(([k,l])=>`<button class="lv" type="button" data-lvl="${esc(i.id)}:${k}" aria-pressed="${lvls(i).includes(k)}" title="${l}" ${S.canWrite?"":"disabled"}>${l[0]==="P"?"P":l[0]}</button>`).join("")}</span>`:""}${S.canWrite?`<button class="btn sm ghost" data-move="${esc(i.id)}" data-sec="${s.key}" data-grp="${esc(g.key)}" data-dir="-1" aria-label="Move up" ${ix===0?"disabled":""}>↑</button><button class="btn sm ghost" data-move="${esc(i.id)}" data-sec="${s.key}" data-grp="${esc(g.key)}" data-dir="1" aria-label="Move down" ${ix===g.items.length-1?"disabled":""}>↓</button>`:""}<button class="btn sm" data-open="${esc(i.id)}">Edit</button></div>`).join("")).join("") : `<div class="colempty">No items. Move cards to "In this issue" on the pipeline.</div>`}
     </div>`).join("")}
     ${hfBox("footer","Closing (footer)",issueFooter(st),!!(st.draftFooter||"").trim(),9)}</div>`;
   const right=`<div><div class="phone"><div class="eyebrow" style="margin-bottom:8px">WhatsApp preview</div><div class="bubble" dir="auto">${waHtml(composeText())}</div></div>
@@ -551,8 +571,10 @@ function drawItem(key, live){
         <div class="typepick" role="radiogroup" aria-label="Type">${TYPES.map(([k,l,c])=>`<input type="radio" name="dType" id="ty-${k}" value="${k}" ${d.type===k?"checked":""} ${dis}><label for="ty-${k}" style="--tc:var(${c})"><span class="dot"></span>${l}</label>`).join("")}</div></div>
       <div class="grid2">
         <label class="f"><span class="lh">Date${isEvent?`<span class="req">*</span>`:""}</span><input id="dDate" type="date" value="${esc(d.date)}" ${dis}></label>
-        <label class="f"><span class="lh">Location${isEvent?`<span class="req">*</span>`:""}</span><input id="dLoc" dir="auto" value="${esc(d.location)}" placeholder="Technion, Haifa · or Online" ${dis}></label>
+        <label class="f"><span class="lh">Location${isEvent?`<span class="req">*</span>`:""}</span><input id="dLoc" dir="auto" value="${esc(d.location)}" placeholder="${d.type==="scholarship"?"University / country":"Technion, Haifa · or Online"}" ${dis}></label>
       </div>
+      ${LEVEL_TYPES.includes(d.type)?`<div class="f" style="display:flex;flex-direction:column;gap:6px;font-size:12.5px;color:var(--muted);font-weight:500">Who is it for? <span style="font-weight:400">(leave empty for all levels)</span><div class="seg" style="margin:0">${LEVELS.map(([k,l])=>`<label style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:8px;cursor:pointer;color:var(--ink)"><input type="checkbox" name="dLevel" value="${k}" ${(d.levels||[]).includes(k)?"checked":""} ${dis}>${l}</label>`).join("")}</div></div>`:""}
+      ${d.type==="scholarship"?`<div class="f" style="display:flex;flex-direction:column;gap:6px;font-size:12.5px;color:var(--muted);font-weight:500">Where is the research?<div class="seg" style="margin:0" role="radiogroup" aria-label="Where">${REGIONS.map(([k,l])=>`<label style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:8px;cursor:pointer;color:var(--ink)"><input type="radio" name="dRegion" value="${k}" ${d.region===k?"checked":""} ${dis}>${l}</label>`).join("")}</div></div>`:""}
       <div id="formErr"></div>
       <details class="more" ${isNew?"":"open"}><summary>More details (optional)</summary><div style="display:flex;flex-direction:column;gap:12px">
         ${isNew?"":`<label class="f">Stage<select id="dStatus" ${S.canWrite?"":"disabled"} ${locked?'data-quickstage="1"':""}>${STAGES.filter(([k])=>!locked||k!=="archived"||d.status==="archived").map(([k,l])=>`<option value="${k}" ${d.status===k?"selected":""}>${l}</option>`).join("")}</select></label>`}
@@ -574,6 +596,8 @@ function drawItem(key, live){
 function itemHintHtml(it){ return `<div class="hint" id="itemHint">Added by ${esc(nameOf(it.addedBy))} ${it.createdAt?agoPhrase(it.createdAt):""}${iOwners(it).length?` · ${esc(andList(iOwners(it).map(firstName)))} ${iOwners(it).length>1?"are":"is"} writing it`:""}${it.issueNo?` · ran in issue #${it.issueNo}`:""}${it.suggestedBy?` · suggested by ${esc(it.suggestedBy)}`:""}</div>`; }
 function readItemForm(){ const d=S.drawer.draft, v=id=>{const e=$("#"+id); return e? e.value : undefined;}; const ty=document.querySelector('input[name="dType"]:checked');
   Object.assign(d,{type:ty?ty.value:d.type,title:(v("dTitle")||"").trim(),url:(v("dUrl")||"").trim(),summary:(v("dSummary")??d.summary??"").trim(),date:v("dDate")||"",location:(v("dLoc")||"").trim(),city:(v("dCity")??d.city??"").trim(),audience:v("dAud")??d.audience,recurring:v("dRec")??d.recurring,sourceId:v("dSrc")??d.sourceId??"",tags:(v("dTags")??(d.tags||[]).join(",")).split(",").map(s=>s.trim()).filter(Boolean)});
+  if(document.querySelector('input[name="dLevel"]')) d.levels=[...document.querySelectorAll('input[name="dLevel"]:checked')].map(x=>x.value); if(!LEVEL_TYPES.includes(d.type)) d.levels=[];
+  const rg=document.querySelector('input[name="dRegion"]:checked'); if(rg) d.region=rg.value; if(d.type!=="scholarship") d.region="";
   if($("#dStatus")) d.status=$("#dStatus").value; if(d.location&&/^online$/i.test(d.location)) d.online=true; return d; }
 const metaCache={};
 async function fetchMeta(url){
@@ -591,7 +615,7 @@ async function submitItem(){
   if(miss.length){ $("#formErr").innerHTML=`<div class="dup">Add ${miss.join(", ").replace(/, ([^,]*)$/," and $1")} first.</div>`; return; }
   if(!D.id && !D.dupAck){ const nu=normUrl(d.url), nt=d.title.toLowerCase(); const dup=A("items").find(i=>(nu&&normUrl(i.url)===nu)||(i.title||"").trim().toLowerCase()===nt);
     if(dup){ D.dup=dup; D.dupAck=true; bump(); return; } }
-  const now=Date.now(); const fields=(({type,status,title,url,summary,date,location,city,audience,recurring,sourceId,online,tags})=>({type,status,title,url,summary,date,location,city,audience,recurring,sourceId,online:!!online,tags}))(d);
+  const now=Date.now(); const fields=(({type,status,title,url,summary,date,location,city,audience,recurring,sourceId,online,tags,region,levels})=>({type,status,title,url,summary,date,location,city,audience,recurring,sourceId,online:!!online,tags,region:region||"",levels:levels||[]}))(d);
   try{
     if(!D.id){ fields.status="found"; if(d.suggestedBy) fields.suggestedBy=d.suggestedBy; const id=await saveItem(null,Object.assign(fields,{addedBy:S.meId,owner:null,votes:{},comments:{},createdAt:now,...stamp()}),true); logAct("added",d.title,id); if(D.fromPlan) await upd("plans",D.fromPlan,{itemId:id,...stamp()}); toast("Added to the desk."); }
     else { const prev=S.items.find(i=>i.id===D.id); const wb=document.querySelector('.ppick[data-pp="dWriters"]'); if(wb){ const w=pickVal(wb); fields.owners=w; fields.owner=w[0]||null; } await saveItem(D.id,Object.assign(fields,stamp())); logAct(prev&&prev.status!==d.status?`moved to ${STAGE[d.status]}:`:"edited",d.title,D.id); toast("Saved."); }
@@ -1068,11 +1092,12 @@ async function vote(id,val){
 }
 async function moveStage(id,stage){ const it=S.items.find(i=>i.id===id); if(!it||(it.status||"found")===stage) return; if(stage==="archived"&&!canEditItem(it)){ toast("Only an admin or the person who added it can archive this."); return; }
   if(await upd("items",id,{status:stage,...stamp()})) logAct(`moved to ${STAGE[stage]}:`,it.title,id); }
-async function moveInSection(id,sec,dir){ const list=issueItems()[sec]; const ix=list.findIndex(i=>i.id===id); const j=ix+dir; if(ix<0||j<0||j>=list.length) return;
-  const arr=list.slice(); [arr[ix],arr[j]]=[arr[j],arr[ix]]; for(let k=0;k<arr.length;k++){ if(arr[k].order!==k&&!await upd("items",arr[k].id,{order:k})) return; } }
+async function moveInSection(id,sec,dir,grp){ const list=issueItems()[sec];
+  const pos=list.map((x,k)=>k).filter(k=>grp===undefined||sec!=="opps"||oppKey(list[k])===grp); const a=pos.findIndex(k=>list[k].id===id), b=a+dir; if(a<0||b<0||b>=pos.length) return;
+  const arr=list.slice(); const ix=pos[a], j=pos[b]; [arr[ix],arr[j]]=[arr[j],arr[ix]]; for(let k=0;k<arr.length;k++){ if(arr[k].order!==k&&!await upd("items",arr[k].id,{order:k})) return; } }
 function shiftDate(s,rec){ const d=parseD(s); if(!d) return ""; if(rec==="weekly") d.setDate(d.getDate()+7); else if(rec==="monthly") d.setMonth(d.getMonth()+1); else if(rec==="yearly") d.setFullYear(d.getFullYear()+1); return ymd(d); }
 // What the public page shows: the issue's sections and items, plus the opening and closing text.
-const pubItem = i => ({id:i.id,title:i.title||"",summary:(i.summary||i.why||"").trim(),type:i.type||"",date:i.date||"",deadline:i.deadline||"",location:i.location||"",online:!!i.online,url:safeUrl(i.url)||""});
+const pubItem = i => ({id:i.id,title:i.title||"",summary:(i.summary||i.why||"").trim(),type:i.type||"",date:i.date||"",deadline:i.deadline||"",location:i.location||"",online:!!i.online,region:i.region||"",levels:lvls(i),url:safeUrl(i.url)||""});
 function groupFor(its, ref){ const out={}; SECTIONS.forEach(s=>out[s.key]=[]); const r=new Date(ref); r.setHours(0,0,0,0);
   its.forEach(i=>{ const ds=i.date||i.deadline; const d=ds?Math.round((parseD(ds)-r)/864e5):null; if(d!==null&&d>=0&&d<=7){out.soon.push(i);return;} const s=SECTIONS.find(s=>s.types&&s.types.includes(i.type)); out[s?s.key:"resources"].push(i); });
   const order=(a,b)=>(a.order??1e9)-(b.order??1e9)||((a.date||a.deadline||"9")<(b.date||b.deadline||"9")?-1:1);
@@ -1115,7 +1140,7 @@ async function importBackup(file){ let data; try{ data=JSON.parse(await file.tex
 document.addEventListener("click", async e=>{
   const mb=e.target.closest("[data-menu]"); if(mb){ const m=$("#menu-"+mb.dataset.menu); const open=m.hidden; closeMenus(); m.hidden=!open; mb.setAttribute("aria-expanded",String(open)); if(open) m.querySelector("button,a")?.focus(); return; }
   if(!e.target.closest(".menu")) closeMenus(); else setTimeout(closeMenus,0);
-  const t=e.target.closest("[data-act],[data-open],[data-meet],[data-plan],[data-task],[data-contact],[data-vote],[data-next],[data-pnext],[data-check],[data-delsrc],[data-move],[data-copyissue],[data-cal],[data-day],[data-done],[data-tf],[data-rsvp],[data-pstage],[data-ck],[data-ckdel],[data-mention],[data-restore],[data-purge],[data-sugg-ok],[data-sugg-no],[data-unskip],[data-ppid],[data-itk],[data-dzset],[data-etab],[data-etf],[data-evstage],[data-tplapply],[data-roledel],[data-buddel],[data-guestdel],[data-rundel]");
+  const t=e.target.closest("[data-act],[data-open],[data-meet],[data-plan],[data-task],[data-contact],[data-vote],[data-next],[data-pnext],[data-check],[data-delsrc],[data-move],[data-copyissue],[data-cal],[data-day],[data-done],[data-tf],[data-rsvp],[data-pstage],[data-ck],[data-ckdel],[data-mention],[data-restore],[data-purge],[data-sugg-ok],[data-lvl],[data-sugg-no],[data-unskip],[data-ppid],[data-itk],[data-dzset],[data-etab],[data-etf],[data-evstage],[data-tplapply],[data-roledel],[data-buddel],[data-guestdel],[data-rundel]");
   if(!t){ if(e.target.classList.contains("scrim")) closeDrawer(); return; }
   const ds=t.dataset;
   if(ds.ppid){ const box=t.closest(".ppick"); const cur=pickVal(box); const next=cur.includes(ds.ppid)?cur.filter(x=>x!==ds.ppid):[...cur,ds.ppid]; pickSet(box,next); box.dataset.dirty="1"; if(box.dataset.ppsave) savePick(box,box.dataset.ppsave,next,cur); return; }
@@ -1155,7 +1180,8 @@ document.addEventListener("click", async e=>{
   if(ds.day){ S.cal.sel = S.cal.sel===ds.day? null : ds.day; const d=parseD(ds.day); if(d.getMonth()!==S.cal.m){ S.cal.y=d.getFullYear(); S.cal.m=d.getMonth(); } render(); return; }
   if(ds.check){ const s=S.sources.find(x=>x.id===ds.check); if(await upd("sources",ds.check,{lastChecked:Date.now(),lastCheckedBy:S.meId})) logAct("checked source",s&&s.name); return; }
   if(ds.delsrc){ const s=S.sources.find(x=>x.id===ds.delsrc); try{ await S.db.collection("sources").doc(ds.delsrc).delete(); logAct("removed source",s&&s.name); }catch(er){writeErr(er);} return; }
-  if(ds.move){ moveInSection(ds.move,ds.sec,Number(ds.dir)); return; }
+  if(ds.move){ moveInSection(ds.move,ds.sec,Number(ds.dir),ds.grp); return; }
+  if(ds.lvl){ const [iid,k]=ds.lvl.split(":"); const it=S.items.find(x=>x.id===iid); if(!it) return; const cur=lvls(it); const next=cur.includes(k)?cur.filter(x=>x!==k):[...cur,k]; await upd("items",iid,{levels:next,...stamp()}); return; }
   if(ds.copyissue){ const is=S.issues.find(x=>x.id===ds.copyissue); is&&copyText(is.text); return; }
   const a=ds.act; const D=S.drawer;
   if(a==="new") openItem(null, ds.date?{date:ds.date,type:"event"}:null);

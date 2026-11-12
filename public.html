@@ -13,13 +13,13 @@
 /* Public page: top bar · helix hero · newsletter (issue picker + cards) · coming up · suggest · join band */
 :root{--bg:#F3F6F9;--surface:#fff;--sunk:#E9EEF3;--ink:#0F1D2E;--muted:#58697C;--line:#D8E0E8;--band:#10223B;--band-2:#16304F;--band-ink:#EAF2FA;--band-muted:#9FB3C8;
   --accent:#0C8C7E;--accent-ink:#fff;--accent-soft:#DCF2EE;--coral:#D9503B;--gold:#E2A93B;--helix-a:#36C3B0;--helix-b:#F2735E;--helix-rung:#6E86A3;--shadow:0 1px 2px rgba(15,29,46,.06),0 8px 24px rgba(15,29,46,.06);
-  --t-event:#0C8C7E;--t-funding:#B7791F;--t-job:#5B5BD6;--t-research:#2F7BC0;--t-industry:#6B7A8C;--t-opportunity:#D9503B;--t-tool:#8A5CC2;
+  --t-event:#0C8C7E;--t-funding:#B7791F;--t-job:#5B5BD6;--t-scholarship:#C2477A;--t-research:#2F7BC0;--t-industry:#6B7A8C;--t-opportunity:#D9503B;--t-tool:#8A5CC2;
   --display:"Bricolage Grotesque","IBM Plex Sans",system-ui,sans-serif;--body:"IBM Plex Sans","IBM Plex Sans Hebrew",system-ui,-apple-system,"Segoe UI",sans-serif;--mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
   color-scheme:light}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0A121C;--surface:#111C29;--sunk:#0D1722;--ink:#E5EDF5;--muted:#8FA1B4;--line:#223142;--band:#08111C;--band-2:#0F1E30;--accent:#3CCFBC;--accent-ink:#06201C;--accent-soft:#0F302C;--coral:#FF7C66;--helix-rung:#4A607A;--shadow:0 1px 2px rgba(0,0,0,.3);
-  --t-event:#3CCFBC;--t-funding:#E0A84A;--t-job:#8C8CF2;--t-research:#5FA6E8;--t-industry:#9AA8B8;--t-opportunity:#FF7C66;--t-tool:#B48BE6;color-scheme:dark}}
+  --t-event:#3CCFBC;--t-funding:#E0A84A;--t-job:#8C8CF2;--t-scholarship:#E87BA8;--t-research:#5FA6E8;--t-industry:#9AA8B8;--t-opportunity:#FF7C66;--t-tool:#B48BE6;color-scheme:dark}}
 :root[data-theme="dark"]{--bg:#0A121C;--surface:#111C29;--sunk:#0D1722;--ink:#E5EDF5;--muted:#8FA1B4;--line:#223142;--band:#08111C;--band-2:#0F1E30;--accent:#3CCFBC;--accent-ink:#06201C;--accent-soft:#0F302C;--coral:#FF7C66;--helix-rung:#4A607A;--shadow:0 1px 2px rgba(0,0,0,.3);
-  --t-event:#3CCFBC;--t-funding:#E0A84A;--t-job:#8C8CF2;--t-research:#5FA6E8;--t-industry:#9AA8B8;--t-opportunity:#FF7C66;--t-tool:#B48BE6;color-scheme:dark}
+  --t-event:#3CCFBC;--t-funding:#E0A84A;--t-job:#8C8CF2;--t-scholarship:#E87BA8;--t-research:#5FA6E8;--t-industry:#9AA8B8;--t-opportunity:#FF7C66;--t-tool:#B48BE6;color-scheme:dark}
 *{box-sizing:border-box} html{scroll-behavior:smooth;scroll-padding-top:72px} body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 var(--body)} img{max-width:100%} [hidden]{display:none!important}
 a{color:var(--accent)} :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
@@ -68,6 +68,8 @@ h2{font-family:var(--display);font-weight:800;font-size:clamp(26px,3.6vw,34px);m
 .ifilter button[aria-pressed=true]{background:var(--accent-soft);color:var(--ink);border-color:var(--accent)}
 .isec{margin-bottom:22px} .isec h4{font-family:var(--display);font-size:19px;margin:0 0 10px;display:flex;align-items:center;gap:8px}
 .isec h4 .n{font-family:var(--body);font-size:12px;font-weight:600;color:var(--muted);background:var(--sunk);border-radius:999px;padding:1px 8px}
+.kindh{font-family:var(--display);font-size:16px;font-weight:700;margin:18px 0 10px;padding-top:12px;border-top:1px solid var(--line)}
+.lvlh{font-size:13px;font-weight:600;color:var(--muted);margin:14px 0 8px;letter-spacing:.02em}
 .cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px} @media (max-width:760px){.cards{grid-template-columns:1fr}}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 16px 12px;display:flex;flex-direction:column;gap:8px;box-shadow:var(--shadow);border-top:4px solid var(--tc,var(--accent));min-width:0;transition:box-shadow .2s}
 .card.hl{box-shadow:0 0 0 3px var(--accent)}
@@ -182,7 +184,7 @@ const linkify = t => esc(t).replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" targe
 const waHtml = t => linkify(t).replace(/\*([^*\n]+)\*/g, "<b>$1</b>").replace(/(^|[\s(])_([^_\n]+)_/g, "$1<i>$2</i>");
 const store = { get(k, d) { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { } } };
 const toast = m => { document.querySelector(".toast")?.remove(); const t = document.createElement("div"); t.className = "toast"; t.textContent = m; document.body.append(t); setTimeout(() => t.remove(), 2600); };
-const TYPES = { event: ["Event", "--t-event"], funding: ["Funding / Grant", "--t-funding"], job: ["Job / Internship", "--t-job"], research: ["Research news", "--t-research"], industry: ["Industry news", "--t-industry"], opportunity: ["Call for applications", "--t-opportunity"], tool: ["Tool / Resource", "--t-tool"] };
+const TYPES = { event: ["Event", "--t-event"], funding: ["Funding / Grant", "--t-funding"], job: ["Job / Internship", "--t-job"], scholarship: ["Research scholarship", "--t-scholarship"], research: ["Research news", "--t-research"], industry: ["Industry news", "--t-industry"], opportunity: ["Call for applications", "--t-opportunity"], tool: ["Tool / Resource", "--t-tool"] };
 const tInfo = t => TYPES[t] || ["Item", "--t-industry"];
 let JOIN = "https://chat.whatsapp.com/G3W1YmnVYJpI4gkq1LAKXu";
 const setJoin = () => ["#joinTop", "#joinHero", "#joinBand"].forEach(s => { const a = $(s); if (a) a.href = JOIN; });
@@ -211,7 +213,7 @@ async function interested(issue, it, btn) { const key = issue + ":" + it.id; if 
 // ── render an item card ──
 const ITEMS = {};
 function cardHtml(issue, it) { ITEMS[issue + ":" + it.id] = it; const [lbl, col] = tInfo(it.type); const u = safe(it.url); const on = mine.has(issue + ":" + it.id); const url = pageUrl("item-" + issue + "-" + it.id);
-  const meta = [it.date ? `<span>🗓 ${esc(fmtD(it.date))}</span>` : "", it.location ? `<span dir="auto">📍 ${esc(it.location)}</span>` : it.online ? "<span>🌐 Online</span>" : "", it.deadline ? `<span>⏳ Apply by ${esc(fmtD(it.deadline))}</span>` : ""].join("");
+  const meta = [it.region ? `<span>${it.region === "abroad" ? "🌍 Abroad" : "🇮🇱 In Israel"}</span>` : "", it.date ? `<span>🗓 ${esc(fmtD(it.date))}</span>` : "", it.location ? `<span dir="auto">📍 ${esc(it.location)}</span>` : it.online ? "<span>🌐 Online</span>" : "", it.deadline ? `<span>⏳ Apply by ${esc(fmtD(it.deadline))}</span>` : ""].join("");
   return `<article class="card" id="item-${issue}-${esc(it.id)}" style="--tc:var(${col})" data-type="${esc(it.type)}">
     <span class="chip">${esc(lbl)}</span>
     <div class="t" dir="auto">${u ? `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(it.title)}</a>` : esc(it.title)}</div>
@@ -221,23 +223,39 @@ function cardHtml(issue, it) { ITEMS[issue + ":" + it.id] = it; const [lbl, col]
   </article>`; }
 
 // ── issues published as WhatsApp text only: rebuild sections and cards from the text ──
-const SEC_TYPE = [[/event|אירוע/i, "event"], [/opportunit|funding|grant|job|הזדמנו|משר/i, "opportunity"], [/science|industry|research|מחקר/i, "research"], [/resource|tool|כלי/i, "tool"], [/coming up/i, "event"]];
+const SEC_TYPE = [[/event|אירוע/i, "event"], [/scholarship|מלג/i, "scholarship"], [/opportunit|funding|grant|job|הזדמנו|משר/i, "opportunity"], [/science|industry|research|מחקר/i, "research"], [/resource|tool|כלי/i, "tool"], [/coming up/i, "event"]];
 function parseText(is) {
   const parts = String(is.text || "").split(/\n?━{4,}\n?/); const header = (parts.shift() || "").trim(); const sections = []; let footer = "";
   const evs = is.events || []; let n = 0;
   parts.forEach(p => { p = p.trim(); const m = /^\*([^*\n]+)\*\s*\n/.exec(p);
     if (!m || !/▪️/.test(p)) { footer = [footer, p].filter(Boolean).join("\n\n"); return; }
     const title = m[1].trim(); const st = (SEC_TYPE.find(([re]) => re.test(title)) || [0, ""])[1];
-    const items = p.slice(m[0].length).split(/\n\s*\n(?=▪️)/).map(b => b.trim()).filter(b => b.startsWith("▪️")).map(b => {
+    let lvl = [], kt = ""; const chunks = [];
+    p.slice(m[0].length).split(/\n\s*\n(?=▪️|🎓|💸|💼)/).map(b => b.trim()).forEach(b => { const kh = /^(?:💸|💼)\s*\*[^*\n]+\*\s*(?:\n|$)/.exec(b); if (kh) { kt = kh[0].startsWith("💸") ? "funding" : "opportunity"; b = b.slice(kh[0].length).trim(); lvl = []; } const h = /^🎓\s*_?([^_\n]+)_?\s*(?:\n|$)/.exec(b);
+      if (h) { const lab = h[1].trim(); lvl = /all levels/i.test(lab) ? [] : LEVELS.filter(([, l]) => lab.includes(l)).map(([k]) => k); b = b.slice(h[0].length).trim(); }
+      if (b.startsWith("▪️")) chunks.push([b, lvl, kt]); });
+    const items = chunks.map(([b, lv, kty]) => {
       const lines = b.split("\n"); const t = (/^▪️\s*\*?(.+?)\*?\s*$/.exec(lines.shift()) || [0, ""])[1].trim(); let url = "", meta = ""; const body = [];
       lines.forEach(l => { const u = /^🔗\s*(\S+)/.exec(l); if (u) { url = u[1]; return; } if (/^_.*_$/.test(l.trim()) && /🗓|📍|🌐|⏳/.test(l)) { meta = l.trim().slice(1, -1); return; } body.push(l); });
       const ev = evs.find(e => (e.title || "").trim() === t) || {}; const loc = (/📍\s*([^·]+)/.exec(meta) || [0, ""])[1].trim();
       let date = ev.date || ""; const dm = /🗓\s*(?:\w+\s+)?(\d{1,2})\s+([A-Za-z]{3})/.exec(meta);
       if (!date && dm) { const sent = new Date(is.sentAt || Date.now()); let d = new Date(`${dm[1]} ${dm[2]} ${sent.getFullYear()} 12:00`); if (!isNaN(d)) { if (d < sent - 60 * 864e5) d.setFullYear(d.getFullYear() + 1); date = d.toISOString().slice(0, 10); } }
-      return { id: ev.id || "t" + (++n), title: t, summary: body.join("\n").trim(), type: ev.type || st, date, location: ev.location || loc, online: /🌐/.test(meta), url: safe(ev.url || url), deadline: "" }; });
+      return { levels: lv, id: ev.id || "t" + (++n), title: t, summary: body.join("\n").trim(), type: ev.type || kty || st, date, location: ev.location || loc, online: /🌐/.test(meta), url: safe(ev.url || url), deadline: "" }; });
     if (items.length) sections.push({ title, items }); });
   return { header, footer, sections };
 }
+
+// Opportunities can be marked Bachelor's / Master's / PhD; cards are grouped by that.
+const LEVELS = [["bsc", "Bachelor's"], ["msc", "Master's"], ["phd", "PhD"]];
+const lvKey = i => LEVELS.map(l => l[0]).filter(k => (i.levels || []).includes(k)).join("+");
+const lvName = k => k ? k.split("+").map(x => (LEVELS.find(l => l[0] === x) || [0, x])[1]).join(" & ") : "All levels";
+function levelGroups(items) { if (!items.some(i => lvKey(i))) return [{ label: "", items }];
+  const keys = [...new Set(items.map(lvKey))]; const rank = k => k === "" ? -1 : LEVELS.findIndex(l => l[0] === k.split("+")[0]) * 10 + k.split("+").length;
+  return keys.sort((a, b) => rank(a) - rank(b)).map(k => ({ label: lvName(k), items: items.filter(i => lvKey(i) === k) })); }
+
+const FUND = ["scholarship", "funding"];
+function oppGroups(items) { const kinds = [["💸 Funding & scholarships", items.filter(i => FUND.includes(i.type))], ["💼 Jobs & programs", items.filter(i => !FUND.includes(i.type))]].filter(k => k[1].length); const many = kinds.length > 1; const out = [];
+  kinds.forEach(([label, its]) => levelGroups(its).forEach((g, ix) => out.push({ ...g, kindLabel: many && ix === 0 ? label : "" }))); return out; }
 
 // ── newsletter ──
 let issues = [], cur = null, filt = "";
@@ -249,7 +267,8 @@ function renderIssue() { let is = issues.find(x => x.number === cur); if (is && 
   if (is.sections && is.sections.length) {
     const types = [...new Set(is.sections.flatMap(s => s.items.map(i => i.type)).filter(Boolean))];
     if (types.length > 1) html += `<div class="ifilter" role="group" aria-label="Filter"><button type="button" data-f="" aria-pressed="${!filt}">All</button>${types.map(t => `<button type="button" data-f="${esc(t)}" aria-pressed="${filt === t}">${esc(tInfo(t)[0])}</button>`).join("")}</div>`;
-    html += is.sections.map(s => { const its = s.items.filter(i => !filt || i.type === filt); return its.length ? `<div class="isec"><h4>${esc(s.title)} <span class="n">${its.length}</span></h4><div class="cards">${its.map(i => cardHtml(is.number, i)).join("")}</div></div>` : ""; }).join("");
+    html += is.sections.map(s => { const its = s.items.filter(i => !filt || i.type === filt); if (!its.length) return "";
+      return `<div class="isec"><h4>${esc(s.title)} <span class="n">${its.length}</span></h4>${(/opportunit/i.test(s.title) || s.key === "opps" ? oppGroups(its) : levelGroups(its)).map(g => (g.kindLabel ? `<div class="kindh">${esc(g.kindLabel)}</div>` : "") + (g.label ? `<div class="lvlh">🎓 ${esc(g.label)}</div>` : "") + `<div class="cards">${g.items.map(i => cardHtml(is.number, i)).join("")}</div>`).join("")}</div>`; }).join("");
     if ((is.footer || "").trim()) html += `<div class="ifoot" dir="auto">${linkify(is.footer.trim())}</div>`;
   } else html += `<div class="bubble" dir="auto">${waHtml(is.text || "")}</div>`;
   box.innerHTML = html;
